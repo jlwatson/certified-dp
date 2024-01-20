@@ -8,4 +8,3 @@ edition = "2021"
 [dependencies]
 rand = "0.8.4"
 curve25519-dalek = { version = "4.1.1", features = ["rand_core"] }
-tiny_ped_com = { path = "./tiny_ped_com" }
