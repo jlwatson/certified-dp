@@ -6,6 +6,7 @@ use rand::rngs::OsRng;
 use rand::{Rng, CryptoRng};
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
+use std::io::{self, Write};
 use std::ops::Neg;
 use pedersen::{setup, commit, commit_with_r, verify, PublicParams};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -88,7 +89,6 @@ fn rnd_gen_phase<T: Rng + CryptoRng>(rng: &mut T, pedersen_pp: &PublicParams, C1
 
     // CF 1: DE flips random bit and commits to i
     let dealer_b = rng.gen_range(0..2);
-    println!("\n\n\tDealer b: {}\n\n", dealer_b);
     let (dealer_b_comm, dealer_b_proof ) =
         commit(rng, &Scalar::from(dealer_b), &pedersen_pp); 
 
@@ -97,10 +97,10 @@ fn rnd_gen_phase<T: Rng + CryptoRng>(rng: &mut T, pedersen_pp: &PublicParams, C1
     let (dealer_sigma_b_comm, dealer_sigma_b_proof) = 
         commit(rng, &Scalar::from(dealer_b), &pedersen_pp);
 
-    let (dealer_sigma_not_b_comm, dealer_sigma_not_b_proof) = 
-        commit(rng, &Scalar::from(1 - dealer_b), &pedersen_pp);
-
     let dealer_e = Scalar::random(rng);
+    let (dealer_sigma_not_b_comm, dealer_sigma_not_b_proof) = 
+        commit(rng, &(Scalar::from(1 - dealer_b) * (dealer_e + Scalar::from(1 as u32))), &pedersen_pp);
+
     //let dealer_sigma_fake_comm = add_comm(&dealer_sigma_not_b_comm, &scale_comm(&dealer_b_comm, &dealer_e.negate()));
     let dealer_sigma_fake_comm = dealer_sigma_not_b_comm + (dealer_e.neg() * dealer_b_comm);
 
@@ -222,7 +222,7 @@ fn query_phase(coefficients: &HashMap<u16, Scalar>, monomial_comms: &HashMap<u16
 
 fn main() {
 
-    println!("Hello!\n");
+    println!("\n-- Running proof of concept --\n");
 
     let mut rng: OsRng = OsRng::default();
     let pedersen_pp = setup(&mut rng);
@@ -232,14 +232,17 @@ fn main() {
     let C1 = commit_with_r(&Scalar::from(1 as u32), &C_PROOF, &pedersen_pp);
 
     print!("Commitment phase...");
+    io::stdout().flush().unwrap();
     let monomial_comms = commitment_phase(&mut rng, &pedersen_pp);
-    println!("complete!");
+    println!("complete");
 
     print!("Randomness phase...");
+    io::stdout().flush().unwrap();
     let (bit_sum, bit_comm, bit_proof) = rnd_add_bits(&mut rng, &pedersen_pp, N, &C0, &C1, &C_PROOF);
-    println!("complete!");
+    println!("complete");
 
     print!("Coefficient generation...");
+    io::stdout().flush().unwrap();
     let mut coefficients: HashMap<u16, Scalar> = HashMap::new();
     for _ in 0..NUM_COEFFICIENTS {
         let mut random_id = monomial_comms.keys().choose(&mut rng).unwrap();
@@ -249,44 +252,16 @@ fn main() {
         let coeff = Scalar::random(&mut rng);
         coefficients.insert(*random_id, coeff);
     }
-    println!("complete!");
+    println!("complete");
 
     print!("Query phase...");
+    io::stdout().flush().unwrap();
     let (query_answer, query_commitment, query_proof) = query_phase(&coefficients, &monomial_comms, &bit_sum, &bit_comm, &bit_proof).unwrap();
-    println!("complete!");
+    println!("complete");
 
     if verify(&query_commitment, &query_proof, &query_answer, &pedersen_pp) {
-        println!("Query answer: {:?}", query_answer);
+        println!("\nQuery verified!\n");
     } else {
-        println!("Query answer: Invalid");
+        println!("\nQuery invalid :(\n");
     }
 }
-
-// fn main() {
-
-//     let mut rng: OsRng = OsRng::default();
-//     let pp = setup(&mut rng);
-
-//     let val1: Value = Value::random(&mut rng);
-//     let (comm1, proof1) = commit(&mut rng, &val1, &pp);
-//     assert_eq!(verify(&comm1, &proof1, &val1, &pp), true);
-
-//     let val2: Value = Value::random(&mut rng);
-//     let (comm2, proof2) = commit(&mut rng, &val2, &pp);
-//     assert_eq!(verify(&comm2, &proof2, &val2, &pp), true);
-
-//     let combined_val = add_value(&val1, &val2);
-//     let combined_comm = add_comm(&comm1, &comm2);
-//     let combined_proof = add_proof(&proof1, &proof2);
-
-//     assert_eq!(verify(&combined_comm, &combined_proof, &combined_val, &pp), true);
-
-//     let a = Value::random(&mut rng);
-//     let scaled_val = scale_value(&val1, &a);
-//     let scaled_comm = scale_comm(&comm1, &a);
-//     let scaled_proof = scale_proof(&proof1, &a);
-
-//     assert_eq!(verify(&scaled_comm, &scaled_proof, &scaled_val, &pp), true);
-
-//     println!("Done!");
-// }
