@@ -232,6 +232,7 @@ dependencies = [
  "curve25519-dalek",
  "num-traits",
  "rand",
+ "rand_chacha",
  "serde",
  "serde_json",
 ]
