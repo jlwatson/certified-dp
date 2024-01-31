@@ -1,5 +1,5 @@
 [package]
-name = "vdp-proof-of-concept"
+name = "vdp-poc"
 version = "0.1.0"
 edition = "2021"
 

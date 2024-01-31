@@ -1,4 +1,3 @@
-
 /*
  * Heavily based on the tiny_ped_com library by Alex Ledger (https://github.com/aled1027/tiny_ped_com)
  */
@@ -6,6 +5,7 @@
 use rand::{Rng, CryptoRng};
 use curve25519_dalek::{constants, ristretto::RistrettoPoint, scalar::Scalar, traits::MultiscalarMul};
 
+#[derive(Clone, Debug)]
 pub struct PublicParams {
     pub g: RistrettoPoint,
     pub h: RistrettoPoint,
