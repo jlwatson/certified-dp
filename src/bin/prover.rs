@@ -1,25 +1,31 @@
-
+use clap::Parser;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use num_traits::PrimInt;
 use rand::{Rng, SeedableRng};
 use rand::rngs::OsRng;
 use rand_chacha::ChaCha20Rng;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::hash::Hash;
+use std::mem::size_of;
 use std::io::{self, Write};
 use std::net::{TcpStream, TcpListener};
 use std::ops::Neg;
+use std::time::Instant;
 
-use vdp_poc::constants::{D, TEST_DATA, N, K, PROVER_ADDRESS, PROVER_PORT};
+use vdp_poc::config::{get_n, PROVER_ADDRESS, PROVER_PORT};
+use vdp_poc::data::Data;
 use vdp_poc::messages::{write_to_stream, read_from_stream, SetupMessage, CommitmentMapMessage, ProverRandomnessComm, VerifierRandomnessChallenge, ProverRandomnessResponse, VerifierRandomnessResult, QueryMessage, QueryAnswerMessage};
 use vdp_poc::pedersen::{setup, commit, commit_with_r, PublicParams};
 
 #[allow(non_snake_case, dead_code)]
-struct ProverState {
+struct ProverState<T> {
     rng: OsRng,
     shared_rng: ChaCha20Rng,
     pedersen_pp: PublicParams,
-    monomial_map: HashMap<u16, (Scalar, RistrettoPoint, Scalar)>,
+    monomial_map: HashMap<T, (Scalar, RistrettoPoint, Scalar)>,
     dealer_b: u32,
     dealer_b_comm: RistrettoPoint,
     dealer_b_proof: Scalar,
@@ -42,7 +48,7 @@ struct ProverState {
 //
 
 // 0
-fn prover_setup(stream: &mut TcpStream) -> ProverState {
+fn prover_setup<T>(stream: &mut TcpStream) -> ProverState<T> {
 
     let mut rng = OsRng::default();
     let prover_seed = rng.gen::<[u8; 32]>();
@@ -97,9 +103,10 @@ fn calculate_monomial_sum<T: PrimInt>(indices: T, data: &[T]) -> Scalar {
     sum
 }
 
-fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, data: &[T], monomial_map: &mut HashMap<T, Scalar>) {
+fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, data: &[T], monomial_map: &mut HashMap<T, Scalar>,
+                                                    dimension: u32, max_degree: u32) {
 
-    if current_idx.to_u32().unwrap() == D || indices.count_ones() == K {
+    if current_idx.to_u32().unwrap() == dimension || indices.count_ones() == max_degree {
         let sum = calculate_monomial_sum(indices, data);
         monomial_map.insert(indices, sum);
         return;
@@ -107,21 +114,21 @@ fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, 
 
     // set bit at current index to a 0 or 1 and recurse
     generate_monomial_sums_helper(
-        indices, current_idx + T::one(), data, monomial_map);
+        indices, current_idx + T::one(), data, monomial_map, dimension, max_degree);
     generate_monomial_sums_helper(
-        indices | (T::one() << current_idx.to_usize().unwrap()), current_idx + T::one(), data, monomial_map);
+        indices | (T::one() << current_idx.to_usize().unwrap()), current_idx + T::one(), data, monomial_map, dimension, max_degree);
 }
 
-fn generate_monomial_sums<T: PrimInt + Hash>(data: &[T]) -> HashMap<T, Scalar> {
+fn generate_monomial_sums<T: PrimInt + Hash>(data: &[T], dimension: u32, max_degree: u32) -> HashMap<T, Scalar> {
     let mut map = HashMap::new();
-    generate_monomial_sums_helper(T::zero(), T::zero(), data, &mut map);
+    generate_monomial_sums_helper(T::zero(), T::zero(), data, &mut map, dimension, max_degree);
     map
 }
 
 // 2
-fn prover_commitment_phase(state: &mut ProverState, stream: &mut TcpStream) {
+fn prover_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut ProverState<T>, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) {
 
-    let monomial_map = generate_monomial_sums(&TEST_DATA);
+    let monomial_map = generate_monomial_sums(&database.entries, dimension, max_degree);
 
     let mut monomial_commitments = HashMap::new();
     for (monomial_id, monomial_sum) in monomial_map {
@@ -130,13 +137,15 @@ fn prover_commitment_phase(state: &mut ProverState, stream: &mut TcpStream) {
         monomial_commitments.insert(monomial_id, comm);
     } 
 
-    let m = CommitmentMapMessage {
+    let m = CommitmentMapMessage::<T> {
         commitment_map: monomial_commitments
     };
 
     write_to_stream(
         stream, serde_json::to_string(&m).unwrap()
     );
+
+    database.commitments = state.monomial_map.clone();
 }
 
 //
@@ -144,7 +153,7 @@ fn prover_commitment_phase(state: &mut ProverState, stream: &mut TcpStream) {
 //
 
 // 4
-fn prover_randomness_phase_comm(state: &mut ProverState, stream: &mut TcpStream) {
+fn prover_randomness_phase_comm<T>(state: &mut ProverState<T>, stream: &mut TcpStream) {
 
     // CF 1: DE flips random bit and commits to i
     let dealer_b: u32 = state.rng.gen_range(0..2);
@@ -185,7 +194,7 @@ fn prover_randomness_phase_comm(state: &mut ProverState, stream: &mut TcpStream)
 }
 
 // 6
-fn prover_randomness_phase_response(state: &mut ProverState, stream: &mut TcpStream) -> bool {
+fn prover_randomness_phase_response<T>(state: &mut ProverState<T>, stream: &mut TcpStream) -> bool {
 
     // CF 3
     let final_commitment: RistrettoPoint;
@@ -240,8 +249,8 @@ fn prover_randomness_phase_response(state: &mut ProverState, stream: &mut TcpStr
 }
 
 // 8
-fn prover_randomness_phase_adjust(state: &mut ProverState) {
-    let adjustment_factor = Scalar::from((N/2) as u32);
+fn prover_randomness_phase_adjust<T>(state: &mut ProverState<T>, db_size: u32, epsilon: f32) {
+    let adjustment_factor = Scalar::from((get_n(db_size, epsilon)/2) as u32);
     state.randomness_bit_sum -= adjustment_factor;
     state.randomness_bit_proof -= state.CPROOF;
 }
@@ -251,8 +260,10 @@ fn prover_randomness_phase_adjust(state: &mut ProverState) {
 //
 
 //12
-fn prover_answer_query(state: &mut ProverState, stream: &mut TcpStream) {
-    let query_m: QueryMessage = serde_json::from_str(
+fn prover_answer_query<T>(state: &mut ProverState<T>, stream: &mut TcpStream)
+where T: Eq + Hash + Display + DeserializeOwned
+{
+    let query_m: QueryMessage<T> = serde_json::from_str(
         &read_from_stream(stream)
     ).unwrap();
 
@@ -281,9 +292,52 @@ fn prover_answer_query(state: &mut ProverState, stream: &mut TcpStream) {
     );
 }
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    // number of elements in the database
+    #[arg(long)]
+    db_size: u32,
+
+    // max monomial degree
+    #[arg(long)]
+    max_degree: u32,
+
+    // differential privacy epsilon
+    #[arg(long)]
+    epsilon: f32,
+
+    // path to database file(s)
+    #[arg(long)]
+    db_path: String,
+}
+
 fn main() {
 
+    type DataT = u32;
+
+    // database size
+    // size of the database entries = max monomial degree
+        // 8, 16, 32, 64
+    // epsilon
+    // (verifier) sparsity aka num_coeff
+    // (verifier)  prover ip and port
+
+    // TIMING STUFF
+    // mainly phases, but the verification split up as commented
+    // save commitment information and run rng/query phase multiple times
+
+
     println!("\n-- Running VDP Prover --\n");
+
+    let args = Args::parse();
+    println!("Configuration:");
+    println!("\tDatabase size: {}", args.db_size);
+    println!("\tDimension: {}", size_of::<DataT>());
+    println!("\tMax degree: {}", args.max_degree);
+    println!("\tEpsilon: {}", args.epsilon);
+    println!("\tDatabase path: {}", args.db_path);
+    println!("");
 
     // Setup
     print!("Setup phase...");
@@ -292,7 +346,9 @@ fn main() {
     let listener = TcpListener::bind(format!("{}:{}", PROVER_ADDRESS, PROVER_PORT)).unwrap();
     let (mut stream, _) = listener.accept().unwrap();
 
-    let mut prover_state = prover_setup(&mut stream);
+    let mut prover_state = prover_setup::<DataT>(&mut stream);
+
+    let mut database = Data::new(&mut prover_state.rng, args.db_size);
 
     println!("complete");
 
@@ -300,18 +356,23 @@ fn main() {
     print!("Commitment phase...");
     io::stdout().flush().unwrap();
    
-    prover_commitment_phase(&mut prover_state, &mut stream);
+    let start_comm = Instant::now();
+    prover_commitment_phase(&mut prover_state, &mut stream, &mut database, size_of::<DataT>() as u32, args.max_degree);
+    let duration_comm = start_comm.elapsed();
    
     println!("complete");
+    println!("  COMMITMENT phase duration: {:?}", duration_comm);
+    println!("    per-monomial: {:?} ({:?} monomials)", duration_comm / prover_state.monomial_map.len() as u32, prover_state.monomial_map.len());
     
     // Randomness Phase
     print!("Randomness phase...");
     io::stdout().flush().unwrap();
 
+    let start_rnd = Instant::now();
     prover_state.randomness_bit_sum = Scalar::from(0 as u32);
     prover_state.randomness_bit_proof = prover_state.CPROOF;
 
-    for _ in 0..N {
+    for _ in 0..get_n(args.db_size, args.epsilon) {
         prover_randomness_phase_comm(&mut prover_state, &mut stream);
         if prover_randomness_phase_response(&mut prover_state, &mut stream) {
             prover_state.randomness_bit_sum += Scalar::from(prover_state.final_b);
@@ -321,16 +382,23 @@ fn main() {
             return;
         }
     }
-    prover_randomness_phase_adjust(&mut prover_state);
+    prover_randomness_phase_adjust(&mut prover_state, args.db_size, args.epsilon);
+    let duration_rnd = start_rnd.elapsed();
 
     println!("complete");
+    println!("  RANDOMNESS GEN phase duration: {:?}", duration_rnd);
+    println!("    per-iteration: {:?} (N = {} iterations)", duration_rnd / get_n(args.db_size, args.epsilon), get_n(args.db_size, args.epsilon));
 
     // Query phase
     print!("Query phase...");
     io::stdout().flush().unwrap();
 
+    let start_query = Instant::now();
     prover_answer_query(&mut prover_state, &mut stream);
+    let duration_query = start_query.elapsed();
 
     println!("complete");
+    println!("  QUERY phase duration: {:?}", duration_query);
+
     println!("");
 }

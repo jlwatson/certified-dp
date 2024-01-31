@@ -1,6 +1,7 @@
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
@@ -10,8 +11,8 @@ pub struct SetupMessage {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct CommitmentMapMessage {
-    pub commitment_map: HashMap<u16, RistrettoPoint>
+pub struct CommitmentMapMessage<T: Eq + Hash> {
+    pub commitment_map: HashMap<T, RistrettoPoint>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -42,8 +43,8 @@ pub struct VerifierRandomnessResult {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct QueryMessage {
-    pub coefficients: HashMap<u16, Scalar>
+pub struct QueryMessage<T: Eq + Hash> {
+    pub coefficients: HashMap<T, Scalar>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
