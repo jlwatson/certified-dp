@@ -172,8 +172,8 @@ fn verifier_randomness_phase_check<T>(state: &mut VerifierState<T>, stream: &mut
 }
 
 // 9
-fn verifier_randomness_phase_adjust<T>(state: &mut VerifierState<T>, db_size: u32, epsilon: f32) {
-    let adjustment_factor = Scalar::from((get_n(db_size, epsilon)/2) as u32);
+fn verifier_randomness_phase_adjust<T>(state: &mut VerifierState<T>, db_size: u32, epsilon: f32, delta: Option<f32>) {
+    let adjustment_factor = Scalar::from((get_n(db_size, epsilon, delta)/2) as u32);
     state.randomness_bit_comm -= commit_with_r(&adjustment_factor, &state.CPROOF, &state.pedersen_pp);
 }
 
@@ -259,6 +259,10 @@ struct Args {
     #[arg(long)]
     epsilon: f32,
 
+    // (optional) differential privacy delta
+    #[arg(long, default_value = None)]
+    delta: Option<f32>,
+
     // sparsity -- aka max coefficients in query polynomial
     #[arg(long)]
     sparsity: u32,
@@ -314,7 +318,7 @@ fn main() {
     let start_rnd = Instant::now();
     verifier_state.randomness_bit_comm = verifier_state.C0;
 
-    for _ in 0..get_n(args.db_size, args.epsilon) {
+    for _ in 0..get_n(args.db_size, args.epsilon, args.delta) {
         verifer_randomness_phase_challenge(&mut verifier_state, &mut stream);
         match verifier_randomness_phase_check(&mut verifier_state, &mut stream) {
             Some(c) => {
@@ -326,7 +330,7 @@ fn main() {
             }
         }
     }
-    verifier_randomness_phase_adjust(&mut verifier_state, args.db_size, args.epsilon);
+    verifier_randomness_phase_adjust(&mut verifier_state, args.db_size, args.epsilon, args.delta);
     let duration_rnd = start_rnd.elapsed();
 
     println!("complete");

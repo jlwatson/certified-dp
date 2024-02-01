@@ -1,5 +1,6 @@
 use clap::Parser;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use indicatif::ProgressBar;
 use num_traits::PrimInt;
 use rand::{Rng, SeedableRng};
 use rand::rngs::OsRng;
@@ -128,14 +129,20 @@ fn generate_monomial_sums<T: PrimInt + Hash>(data: &[T], dimension: u32, max_deg
 // 2
 fn prover_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut ProverState<T>, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) {
 
+    eprintln!("Generating monomial sums...");
     let monomial_map = generate_monomial_sums(&database.entries, dimension, max_degree);
+    eprintln!("Done");
 
     let mut monomial_commitments = HashMap::new();
+
+    let bar = ProgressBar::new(monomial_map.len() as u64);
     for (monomial_id, monomial_sum) in monomial_map {
         let (comm, proof) = commit(&mut state.rng, &monomial_sum, &state.pedersen_pp);
         state.monomial_map.insert(monomial_id, (monomial_sum, comm, proof));
         monomial_commitments.insert(monomial_id, comm);
+        bar.inc(1);
     } 
+    bar.finish();
 
     let m = CommitmentMapMessage::<T> {
         commitment_map: monomial_commitments
@@ -249,8 +256,8 @@ fn prover_randomness_phase_response<T>(state: &mut ProverState<T>, stream: &mut 
 }
 
 // 8
-fn prover_randomness_phase_adjust<T>(state: &mut ProverState<T>, db_size: u32, epsilon: f32) {
-    let adjustment_factor = Scalar::from((get_n(db_size, epsilon)/2) as u32);
+fn prover_randomness_phase_adjust<T>(state: &mut ProverState<T>, db_size: u32, epsilon: f32, delta: Option<f32>) {
+    let adjustment_factor = Scalar::from((get_n(db_size, epsilon, delta)/2) as u32);
     state.randomness_bit_sum -= adjustment_factor;
     state.randomness_bit_proof -= state.CPROOF;
 }
@@ -310,21 +317,13 @@ struct Args {
     // path to database file(s)
     #[arg(long)]
     db_path: String,
+
+    // (optional) delta parameter
+    #[arg(long, default_value = None)]
+    delta: Option<f32>,
 }
 
 fn main() {
-
-    // database size
-    // size of the database entries = max monomial degree
-        // 8, 16, 32, 64
-    // epsilon
-    // (verifier) sparsity aka num_coeff
-    // (verifier)  prover ip and port
-
-    // TIMING STUFF
-    // mainly phases, but the verification split up as commented
-    // save commitment information and run rng/query phase multiple times
-
 
     println!("\n-- Running VDP Prover --\n");
 
@@ -369,7 +368,7 @@ fn main() {
     prover_state.randomness_bit_sum = Scalar::from(0 as u32);
     prover_state.randomness_bit_proof = prover_state.CPROOF;
 
-    for _ in 0..get_n(args.db_size, args.epsilon) {
+    for _ in 0..get_n(args.db_size, args.epsilon, args.delta) {
         prover_randomness_phase_comm(&mut prover_state, &mut stream);
         if prover_randomness_phase_response(&mut prover_state, &mut stream) {
             prover_state.randomness_bit_sum += Scalar::from(prover_state.final_b);
@@ -379,12 +378,13 @@ fn main() {
             return;
         }
     }
-    prover_randomness_phase_adjust(&mut prover_state, args.db_size, args.epsilon);
+    prover_randomness_phase_adjust(&mut prover_state, args.db_size, args.epsilon, args.delta);
     let duration_rnd = start_rnd.elapsed();
 
     println!("complete");
     println!("  RANDOMNESS GEN phase duration: {:?}", duration_rnd);
-    println!("    per-iteration: {:?} (N = {} iterations)", duration_rnd / get_n(args.db_size, args.epsilon), get_n(args.db_size, args.epsilon));
+    println!("    per-iteration: {:?} (N = {} iterations)",
+        duration_rnd / get_n(args.db_size, args.epsilon, args.delta), get_n(args.db_size, args.epsilon, args.delta));
 
     // Query phase
     print!("Query phase...");
