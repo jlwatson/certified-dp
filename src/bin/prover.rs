@@ -15,7 +15,7 @@ use std::net::{TcpStream, TcpListener};
 use std::ops::Neg;
 use std::time::Instant;
 
-use vdp_poc::config::{get_n, PROVER_ADDRESS, PROVER_PORT};
+use vdp_poc::config::{get_n, PROVER_ADDRESS, PROVER_PORT, DataT};
 use vdp_poc::data::Data;
 use vdp_poc::messages::{write_to_stream, read_from_stream, SetupMessage, CommitmentMapMessage, ProverRandomnessComm, VerifierRandomnessChallenge, ProverRandomnessResponse, VerifierRandomnessResult, QueryMessage, QueryAnswerMessage};
 use vdp_poc::pedersen::{setup, commit, commit_with_r, PublicParams};
@@ -314,8 +314,6 @@ struct Args {
 
 fn main() {
 
-    type DataT = u32;
-
     // database size
     // size of the database entries = max monomial degree
         // 8, 16, 32, 64
@@ -333,7 +331,7 @@ fn main() {
     let args = Args::parse();
     println!("Configuration:");
     println!("\tDatabase size: {}", args.db_size);
-    println!("\tDimension: {}", size_of::<DataT>());
+    println!("\tDimension: {}", size_of::<DataT>() * 8);
     println!("\tMax degree: {}", args.max_degree);
     println!("\tEpsilon: {}", args.epsilon);
     println!("\tDatabase path: {}", args.db_path);
@@ -347,7 +345,6 @@ fn main() {
     let (mut stream, _) = listener.accept().unwrap();
 
     let mut prover_state = prover_setup::<DataT>(&mut stream);
-
     let mut database = Data::new(&mut prover_state.rng, args.db_size);
 
     println!("complete");
@@ -357,7 +354,7 @@ fn main() {
     io::stdout().flush().unwrap();
    
     let start_comm = Instant::now();
-    prover_commitment_phase(&mut prover_state, &mut stream, &mut database, size_of::<DataT>() as u32, args.max_degree);
+    prover_commitment_phase(&mut prover_state, &mut stream, &mut database, size_of::<DataT>() as u32 * 8, args.max_degree);
     let duration_comm = start_comm.elapsed();
    
     println!("complete");

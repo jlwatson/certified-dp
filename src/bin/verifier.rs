@@ -16,7 +16,7 @@ use std::ops::Neg;
 use std::time::Duration;
 use std::time::Instant;
 
-use vdp_poc::config::get_n;
+use vdp_poc::config::{get_n, DataT};
 use vdp_poc::messages::{read_from_stream, write_to_stream, CommitmentMapMessage, ProverRandomnessComm, ProverRandomnessResponse, VerifierRandomnessResult, QueryAnswerMessage, QueryMessage, SetupMessage, VerifierRandomnessChallenge};
 use vdp_poc::pedersen::{setup, commit_with_r, verify, PublicParams};
 
@@ -270,14 +270,12 @@ struct Args {
 
 fn main() {
 
-    type DataT = u32;
-
     println!("\n-- Running VDP Verifier --\n");
 
     let args = Args::parse();
     println!("Configuration:");
     println!("\tDatabase size: {}", args.db_size);
-    println!("\tDimension: {}", size_of::<DataT>());
+    println!("\tDimension: {}", size_of::<DataT>() * 8);
     println!("\tMax degree: {}", args.max_degree);
     println!("\tEpsilon: {}", args.epsilon);
     println!("\tSparsity: {}", args.sparsity);
