@@ -9,4 +9,4 @@ pub fn get_n(db_size: u32, epsilon: f32) -> u32 {
 pub const PROVER_ADDRESS: &str = "127.0.0.1";
 pub const PROVER_PORT: &str = "10020";
 
-pub type DataT = u16;
+pub type DataT = u32;
