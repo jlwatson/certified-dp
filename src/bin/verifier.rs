@@ -21,7 +21,7 @@ use std::time::Instant;
 use vdp_poc::bit_sigma;
 use vdp_poc::product_sigma;
 use vdp_poc::config::{get_n, get_delta, DataT};
-use vdp_poc::messages::{read_from_stream, write_to_stream, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, ProverSigmaCommitmentMessage, ProverSigmaResponseMessage, QueryAnswerMessage, QueryMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge, VerifierSigmaChallengeMessage};
+use vdp_poc::messages::{read_from_stream, write_to_stream, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, ProverSigmaCommitmentMessage, ProverSigmaResponseMessage, QueryAnswerMessage, QueryMessage, ReadyMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge, VerifierSigmaChallengeMessage};
 use vdp_poc::pedersen;
 
 #[allow(non_snake_case)]
@@ -143,10 +143,9 @@ fn extract_monomials<T: PrimInt + Hash>(verifier_node: &MonomialVerifierTreeNode
         }
     }
 
-    // adjust for dimensions that aren't exactly the size of T
-    let remaining_zeros = curr_tag.leading_zeros() - (T::zero().count_zeros() - dimension);
+    let offset = T::zero().count_zeros() - curr_tag.leading_zeros();
     for (i, verifier_child) in verifier_node.children.iter().enumerate() {
-        let new_tag = curr_tag | (T::one() << (remaining_zeros as usize + i));
+        let new_tag = curr_tag | (T::one() << (offset as usize + i));
         extract_monomials(verifier_child, new_tag, dimension, element_commitment_map);
     }
 }
@@ -359,10 +358,6 @@ where T: Eq + Hash + Clone + Serialize
 fn verifier_check_query<T: PrimInt + Hash>(state: &mut VerifierState<T>, stream: &mut TcpStream, query_coefficients: &HashMap<T, Scalar>) -> (bool, Duration, Duration)
 where T: Eq + Hash + Display
 {
-    let query_answer_m: QueryAnswerMessage = serde_json::from_str(
-        &read_from_stream(stream)
-    ).unwrap();
-
     let mut query_comm = state.randomness_bit_comm;
 
     let start_homomorphic = Instant::now();
@@ -379,6 +374,10 @@ where T: Eq + Hash + Display
     }
     let duration_homomorphic = start_homomorphic.elapsed();
 
+    let query_answer_m: QueryAnswerMessage = serde_json::from_str(
+        &read_from_stream(stream)
+    ).unwrap();
+
     let query_answer = query_answer_m.answer;
     let query_proof = query_answer_m.proof;
 
@@ -393,6 +392,15 @@ where T: Eq + Hash + Display
     }
 
     (result, duration_homomorphic, duration_verify)
+}
+
+fn synchronize_prover(stream: &mut TcpStream) {
+    write_to_stream(
+        stream, serde_json::to_string(&ReadyMessage { ready: true }).unwrap()
+    );
+    let _prover_ready: ReadyMessage = serde_json::from_str(
+        &read_from_stream(stream)
+    ).unwrap();
 }
 
 #[derive(Parser, Debug)]
@@ -450,22 +458,39 @@ fn main() {
     
     eprintln!("Setup phase complete");
 
-    // Commitment Phase
-    eprintln!("Commitment phase start");
+    // Honest Commitment Phase
+    eprintln!("Honest commitment phase start");
    
-    let start_comm = Instant::now();
+    synchronize_prover(&mut stream);
+    let start_honest_comm = Instant::now();
+    verifier_honest_commitment_phase(&mut verifier_state, &mut stream);
+    synchronize_prover(&mut stream);
+    let duration_honest_comm = start_honest_comm.elapsed();
+   
+    eprintln!("Honest commitment phase complete ({:?})", duration_honest_comm);
+
+    // clear out the monomial commitments for the dishonest phase
+    verifier_state.monomial_commitments.clear();
+
+    // Dishonest Commitment Phase
+    eprintln!("Dishonest commitment phase start");
+   
+    synchronize_prover(&mut stream);
+    let start_dishonest_comm = Instant::now();
     let comm_success = verifier_dishonest_commitment_phase(&mut verifier_state, &mut stream, args.dimension);
-    let duration_comm = start_comm.elapsed();
+    synchronize_prover(&mut stream);
+    let duration_dishonest_comm = start_dishonest_comm.elapsed();
 
     if !comm_success {
         return;
     }
    
-    eprintln!("Commitment phase complete ({:?})", duration_comm);
+    eprintln!("Dishonest commitment phase complete ({:?})", duration_dishonest_comm);
     
     // Randomness Phase
     eprintln!("Randomness phase start");
 
+    synchronize_prover(&mut stream);
     let start_rnd = Instant::now();
     verifier_state.randomness_bit_comm = verifier_state.C0;
 
@@ -482,6 +507,7 @@ fn main() {
         }
     }
     verifier_randomness_phase_adjust(&mut verifier_state, args.db_size, args.epsilon, args.delta);
+    synchronize_prover(&mut stream);
     let duration_rnd = start_rnd.elapsed();
 
     eprintln!("Randomness phase complete ({:?})", duration_rnd);
@@ -496,20 +522,30 @@ fn main() {
     // Query phase
     eprintln!("Query phase start");
 
+    synchronize_prover(&mut stream);
     let start_query = Instant::now();
     verifier_send_query(&mut verifier_state, &mut stream, &query_coefficients);
     let (_success, homomorphic_duration, check_duration) = 
         verifier_check_query(&mut verifier_state, &mut stream, &query_coefficients);
+    synchronize_prover(&mut stream);
     let duration_query = start_query.elapsed();
 
     eprintln!("Query phase complete ({:?})", duration_query);
 
     ptable!(
         ["Verifier", format!("(n={}, d={}, ε={}, δ={:?} s={})", args.db_size, args.dimension, args.epsilon, get_delta(args.db_size, args.delta), args.sparsity)],
-        ["Commit", format!("{:?}", duration_comm)],
+        ["Commit", ""],
+        ["  -> Honest", format!("{:?}", duration_honest_comm)],
+        ["  -> Dishonest", format!("{:?}", duration_dishonest_comm)],
         ["Randomness", format!("{:?}", duration_rnd)],
         ["Query", format!("{:?}", duration_query)],
         ["  -> Homomorphic", format!("{:?}", homomorphic_duration)],
         ["  -> Check", format!("{:?}", check_duration)]
     );
+
+    println!("\n\nCSV (s):");
+    println!("{},{},{},{},{},{}", duration_honest_comm.as_secs_f32(), duration_dishonest_comm.as_secs_f32(), duration_rnd.as_secs_f32(), duration_query.as_secs_f32(), homomorphic_duration.as_secs_f32(), check_duration.as_secs_f32());
+
+    println!("\nCSV (µs):");
+    println!("{},{},{},{},{},{}", duration_honest_comm.as_micros(), duration_dishonest_comm.as_micros(), duration_rnd.as_micros(), duration_query.as_micros(), homomorphic_duration.as_micros(), check_duration.as_micros());
 }

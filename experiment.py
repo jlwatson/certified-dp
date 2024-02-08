@@ -31,8 +31,12 @@ if __name__ == "__main__":
     if not args.debug:
         cargo_command.append("--release")
 
+    flamegraph_command = ["cargo", "flamegraph", "-o=prover.svg"]
+    if not args.debug:
+        flamegraph_command.append("--release")
+
     prover_command = [
-        *cargo_command,
+        *flamegraph_command,
         "--bin", "prover", "--",
         "--db-size", str(args.db_size),
         "--max-degree", str(args.max_degree),

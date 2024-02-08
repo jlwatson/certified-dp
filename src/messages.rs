@@ -9,6 +9,11 @@ use crate::bit_sigma;
 use crate::product_sigma;
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct ReadyMessage {
+    pub ready: bool
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SetupMessage {
     pub seed: [u8; 32]
 }
