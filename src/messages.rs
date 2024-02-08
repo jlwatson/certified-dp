@@ -5,9 +5,49 @@ use std::hash::Hash;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
+use crate::bit_sigma;
+use crate::product_sigma;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SetupMessage {
     pub seed: [u8; 32]
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MonomialCommitmentTreeNode {
+    pub commitment: Option<RistrettoPoint>,
+    pub product_sigma_commitment: Option<product_sigma::Commitment>,
+    pub children: Vec<Box<MonomialCommitmentTreeNode>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProverSigmaCommitmentMessage {
+    pub db_bit_sigma_commitments: Vec<Vec<bit_sigma::Commitment>>,
+    pub monomial_product_sigma_commitments: Vec<MonomialCommitmentTreeNode>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MonomialChallengeTreeNode {
+    pub product_sigma_challenge: Option<product_sigma::Challenge>,
+    pub children: Vec<Box<MonomialChallengeTreeNode>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct VerifierSigmaChallengeMessage {
+    pub db_bit_sigma_challenges: Vec<Vec<bit_sigma::Challenge>>,
+    pub monomial_product_sigma_challenges: Vec<MonomialChallengeTreeNode>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MonomialResponseTreeNode {
+    pub product_sigma_response: Option<product_sigma::Response>,
+    pub children: Vec<Box<MonomialResponseTreeNode>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProverSigmaResponseMessage {
+    pub db_bit_sigma_responses: Vec<Vec<bit_sigma::Response>>,
+    pub monomial_product_sigma_responses: Vec<MonomialResponseTreeNode>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -17,28 +57,23 @@ pub struct CommitmentMapMessage<T: Eq + Hash> {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProverRandomnessComm {
-    pub dealer_b_comm: RistrettoPoint,
-    pub c0: RistrettoPoint,
-    pub c1: RistrettoPoint
+    pub commitment: bit_sigma::Commitment,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct VerifierRandomnessChallenge {
     pub player_b: u32,
-    pub player_e: Scalar
+    pub sigma_challenge: bit_sigma::Challenge
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProverRandomnessResponse {
     pub final_commitment: RistrettoPoint,
-    pub z0: Scalar,
-    pub z1: Scalar,
-    pub e0: Scalar,
-    pub e1: Scalar
+    pub sigma_response: bit_sigma::Response
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct VerifierRandomnessResult {
+pub struct VerifierCheckMessage {
     pub success: bool
 }
 

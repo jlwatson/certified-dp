@@ -33,15 +33,4 @@ where
             commitments,
         }
     }
-
-    // pub fn save_to_file(&self, filename: &str) {
-    //     let mut file = File::create(filename).unwrap();
-    //     let mut writer = BufWriter::new(&file);
-
-    //     let db_str = 
-
-    //     for entry in &self.entries {
-    //         writer.write_all(&entry.to_le_bytes()).unwrap();
-    //     }
-    // }
 }

@@ -8,6 +8,14 @@ pub fn get_n(db_size: u32, epsilon: f32, delta: Option<f32>) -> u32 {
     }
 }
 
+#[inline]
+pub fn get_delta(db_size: u32, delta: Option<f32>) -> f32 {
+    match delta {
+        Some(d) => d,
+        None => 1.0 / (db_size as f32).powf(db_size.ilog2() as f32) as f32
+    }
+}
+
 // Prover configuration
 pub const PROVER_ADDRESS: &str = "127.0.0.1";
 pub const PROVER_PORT: &str = "10020";

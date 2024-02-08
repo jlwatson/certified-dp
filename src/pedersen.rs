@@ -12,7 +12,6 @@ pub struct PublicParams {
 }
 
 pub fn setup<T: Rng + CryptoRng>(mut rng: &mut T) -> PublicParams {
-    // TODO: check that g and h are correct
     let h = constants::RISTRETTO_BASEPOINT_POINT;
     let g = Scalar::random(&mut rng) * h;
 
