@@ -52,6 +52,9 @@ pub struct Verifier {
     beta: RistrettoPoint,
     gamma: RistrettoPoint,
     e: Scalar,
+    c1_prime: RistrettoPoint,
+    c2_prime: RistrettoPoint,
+    c3_prime: RistrettoPoint,
 }
 
 impl Default for Verifier {
@@ -64,6 +67,9 @@ impl Default for Verifier {
             beta: RistrettoPoint::default(),
             gamma: RistrettoPoint::default(),
             e: Scalar::default(),
+            c1_prime: RistrettoPoint::default(),
+            c2_prime: RistrettoPoint::default(),
+            c3_prime: RistrettoPoint::default(),
         }
     }
 }
@@ -134,7 +140,10 @@ pub fn challenge<T: Rng + CryptoRng>(rng: &mut T, comm_msg: &Commitment) -> (Ver
             alpha: comm_msg.alpha,
             beta: comm_msg.beta,
             gamma: comm_msg.gamma,
-            e
+            e,
+            c1_prime: RistrettoPoint::default(),
+            c2_prime: RistrettoPoint::default(),
+            c3_prime: RistrettoPoint::default(),
         },
         Challenge {
             e,
@@ -160,6 +169,10 @@ pub fn verify(pp: &pedersen::PublicParams, sigma_v: &mut Verifier, response: &Re
     let c_1_prime = sigma_v.alpha + (sigma_v.e * sigma_v.c_1);
     let c_2_prime = sigma_v.beta + (sigma_v.e * sigma_v.c_2);
     let c_3_prime = sigma_v.gamma + (sigma_v.e * sigma_v.c_3);
+
+    sigma_v.c1_prime = c_1_prime;
+    sigma_v.c2_prime = c_2_prime;
+    sigma_v.c3_prime = c_3_prime;
 
     let special_pp = pedersen::PublicParams {
         g: sigma_v.c_1,

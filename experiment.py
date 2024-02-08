@@ -23,6 +23,7 @@ if __name__ == "__main__":
     parser.add_argument('--delta', type=float, help='Delta for differential privacy')
     parser.add_argument('--sparsity', type=int, help='Sparsity of the query', required=True)
     parser.add_argument('--debug', action='store_true', help='Run debug binaries', default=False)
+    parser.add_argument('--no-logs', action='store_true', help='Do not print logs', default=False)
 
     args = parser.parse_args()
 
@@ -79,11 +80,12 @@ if __name__ == "__main__":
     prover_read_thread.join()
     verifier_read_thread.join()
 
-    print()
-    print("=== prover.log ===")
-    with open("prover.log") as f:
-        print(f.read())
+    if not args.no_logs:
+        print()
+        print("=== prover.log ===")
+        with open("prover.log") as f:
+            print(f.read())
 
-    print("=== verifier.log ===")
-    with open("verifier.log") as f:
-        print(f.read())
+        print("=== verifier.log ===")
+        with open("verifier.log") as f:
+            print(f.read())

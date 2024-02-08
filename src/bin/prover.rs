@@ -523,24 +523,6 @@ fn main() {
 
     eprintln!("Setup phase complete");
 
-    eprintln!("Sigma check");
-
-    let b_1 = Scalar::from(1 as u32);
-    let (c_1, r_1) = pedersen::commit(&mut prover_state.rng, &b_1, &prover_state.pedersen_pp);
-
-    let b_2 = Scalar::from(1 as u32);
-    let (c_2, r_2) = pedersen::commit(&mut prover_state.rng, &b_2, &prover_state.pedersen_pp);
-
-    let b_3 = b_1 * b_2;
-    let (c_3, r_3) = pedersen::commit(&mut prover_state.rng, &b_3, &prover_state.pedersen_pp);
-
-    let (mut prover, commitment) = product_sigma::commit(&mut prover_state.rng, &prover_state.pedersen_pp, (b_1, c_1, r_1), (b_2, c_2, r_2), (b_3, c_3, r_3));
-    let (mut verifier, challenge) = product_sigma::challenge(&mut prover_state.rng, &commitment);
-    let response = product_sigma::response(&mut prover, &challenge);
-    let result = product_sigma::verify(&prover_state.pedersen_pp, &mut verifier, &response);
-
-    eprintln!("Sigma check result: {}", result);
-
     // Commitment Phase
     eprintln!("Commitment phase start");
    

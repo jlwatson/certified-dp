@@ -31,7 +31,7 @@ pub fn commit_with_r(val: &Scalar, r: &Scalar, params: &PublicParams) -> Ristret
     RistrettoPoint::multiscalar_mul([val, r], [params.g, params.h])
 }
 
-pub fn verify(commitment: &RistrettoPoint, proof: &Scalar, val: &Scalar, params: &PublicParams) -> bool {
+pub fn verify(commitment: &RistrettoPoint, val: &Scalar, proof: &Scalar, params: &PublicParams) -> bool {
     let lhs = RistrettoPoint::multiscalar_mul([val, proof], [params.g, params.h]);
     lhs == *commitment 
 }

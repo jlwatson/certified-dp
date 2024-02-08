@@ -384,7 +384,7 @@ where T: Eq + Hash + Display
 
     // measure verification check
     let start_verify = Instant::now();
-    let result = pedersen::verify(&query_comm, &query_proof, &query_answer, &state.pedersen_pp);
+    let result = pedersen::verify(&query_comm, &query_answer, &query_proof, &state.pedersen_pp);
     let duration_verify = start_verify.elapsed();
     if result {
         println!("Query verified!");
