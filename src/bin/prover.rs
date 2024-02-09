@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use vdp_poc::config::{get_n, get_delta, PROVER_ADDRESS, PROVER_PORT, DataT};
 use vdp_poc::data::Data;
-use vdp_poc::messages::{read_from_stream, write_to_stream, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, ProverSigmaCommitmentMessage, ProverSigmaResponseMessage, QueryAnswerMessage, QueryMessage, ReadyMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge, VerifierSigmaChallengeMessage};
+use vdp_poc::messages::{read_from_stream, write_to_stream, BitSigmaChallengeMessage, BitSigmaCommitmentMessage, BitSigmaResponseMessage, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, QueryAnswerMessage, QueryMessage, ReadyMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge};
 use vdp_poc::pedersen;
 use vdp_poc::bit_sigma;
 use vdp_poc::product_sigma;
@@ -259,16 +259,13 @@ fn gen_monomial_map<T: PrimInt + Hash>(prover_trees: &Vec<MonomialProverTreeNode
 
 fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut ProverState, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) -> bool {
 
-    // Generate database entry and monomial commitments
+    // Per-database entry bit sigma protocols
     let mut db_bit_sigma_provers: Vec<Vec<bit_sigma::Prover>> = Vec::new();
-    let mut db_bit_sigma_commitments: Vec<Vec<bit_sigma::Commitment>> = Vec::new();
-
     // Forest of monomial trees per-database element
     let mut monomial_prover_trees: Vec<MonomialProverTreeNode> = Vec::new();
-    let mut monomial_commitment_trees: Vec<MonomialCommitmentTreeNode> = Vec::new();
 
-    for (_i, entry) in database.entries.iter().enumerate() {
-        //eprintln!("  entry {}/{}", i, database.entries.len());
+    for (i, entry) in database.entries.iter().enumerate() {
+        eprintln!("  committing to entry   {}/{}", i+1, database.entries.len());
 
         let mut entry_commitments: Vec<(Scalar, RistrettoPoint, Scalar)> = Vec::new();
         let mut entry_sigma_provers: Vec<bit_sigma::Prover> = Vec::new();
@@ -289,7 +286,13 @@ fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut 
         let _bit_sigma_duration = bit_sigma_start.elapsed();
 
         db_bit_sigma_provers.push(entry_sigma_provers);
-        db_bit_sigma_commitments.push(entry_sigma_commitments);
+
+        // send the entry bit sigma commitments to the verifier
+        write_to_stream(
+            stream, serde_json::to_string(&BitSigmaCommitmentMessage {
+                commitments: entry_sigma_commitments
+            }).unwrap()
+        );
 
         let mut entry_prover_root = MonomialProverTreeNode {
             commitment: None,
@@ -308,62 +311,48 @@ fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut 
         let _monomial_tree_duration = monomial_tree_start.elapsed();
 
         monomial_prover_trees.push(entry_prover_root);
-        monomial_commitment_trees.push(entry_commitment_root);
 
-        //eprintln!("  bit sigma: {:?}, monomial tree: {:?}", bit_sigma_duration, monomial_tree_duration);
+        // send entry monomial tree to the prover
+        write_to_stream(
+            stream, serde_json::to_string(&entry_commitment_root).unwrap()
+        )
     }
 
-    // now that we have all the starting sigma proof commitments, send them all to the verifier
-    write_to_stream(
-        stream, serde_json::to_string(&ProverSigmaCommitmentMessage{
-            db_bit_sigma_commitments,
-            monomial_product_sigma_commitments: monomial_commitment_trees
-        }).unwrap()
-    );
+    let mut response_messages = Vec::new();
 
-    eprintln!("  sent commitments");
+    for i in 0..database.entries.len() {
+        eprintln!("  responding to entry {}/{}", i+1, database.entries.len());
 
-    // read back the challenges and generate the appropriate responses
-    let challenge_m: VerifierSigmaChallengeMessage = serde_json::from_str(
-        &read_from_stream(stream)
-    ).unwrap();
+        let challenge_m: BitSigmaChallengeMessage = serde_json::from_str(
+            &read_from_stream(stream)
+        ).unwrap();
 
-    let mut db_bit_sigma_responses: Vec<Vec<bit_sigma::Response>> = Vec::new();
-    for element_idx in 0..challenge_m.db_bit_sigma_challenges.len() {
-        let mut element_responses: Vec<bit_sigma::Response> = Vec::new();
-
-        for bit_idx in 0..challenge_m.db_bit_sigma_challenges[element_idx].len() {
-            let m = &challenge_m.db_bit_sigma_challenges[element_idx][bit_idx];
-            let response = bit_sigma::response(&mut db_bit_sigma_provers[element_idx][bit_idx], m);
-            element_responses.push(response);
+        let mut entry_responses: Vec<bit_sigma::Response> = Vec::new();
+        for (bit_idx, m) in challenge_m.challenges.iter().enumerate() {
+            let response = bit_sigma::response(&mut db_bit_sigma_provers[i][bit_idx], m);
+            entry_responses.push(response);
         }
 
-        db_bit_sigma_responses.push(element_responses);
-    }
+        response_messages.push(serde_json::to_string(&BitSigmaResponseMessage {
+            responses: entry_responses
+        }).unwrap());
 
-    let mut monomial_product_sigma_responses: Vec<MonomialResponseTreeNode> = Vec::new();
-    for (i, challenge_root) in challenge_m.monomial_product_sigma_challenges.iter().enumerate() {
+        let monomial_challenge_root: MonomialChallengeTreeNode = serde_json::from_str(
+            &read_from_stream(stream)
+        ).unwrap();
+
         let mut response_root = MonomialResponseTreeNode {
             product_sigma_response: None,
             children: Vec::new(),
         };
+        gen_response_tree(state, &mut monomial_prover_trees[i], &monomial_challenge_root, &mut response_root);
 
-        let prover_root = &mut monomial_prover_trees[i];
-
-        gen_response_tree(state, prover_root, challenge_root, &mut response_root);
-
-        monomial_product_sigma_responses.push(response_root);
+        response_messages.push(serde_json::to_string(&response_root).unwrap());
     }
-    
-    // send responses back to verifier
-    write_to_stream(
-        stream, serde_json::to_string(&ProverSigmaResponseMessage {
-            db_bit_sigma_responses,
-            monomial_product_sigma_responses
-        }).unwrap()
-    );
 
-    eprintln!("  sent responses");
+    for m in response_messages {
+        write_to_stream(stream, m);
+    }
 
     let check_m: VerifierCheckMessage = serde_json::from_str(
         &read_from_stream(stream)
@@ -587,7 +576,7 @@ fn main() {
         duration_dishonest_comm, database.commitments.len(), duration_dishonest_comm / database.commitments.len() as u32);
    
     // Randomness Phase
-    eprintln!("Randomness phase start"); 
+    eprintln!("Randomness phase start (N: {:?})", get_n(args.db_size, args.epsilon, args.delta));
 
     synchronize_verifier(&mut stream);
     let start_rnd = Instant::now();

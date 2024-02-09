@@ -19,6 +19,11 @@ pub struct SetupMessage {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct BitSigmaCommitmentMessage {
+    pub commitments: Vec<bit_sigma::Commitment>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MonomialCommitmentTreeNode {
     pub commitment: Option<RistrettoPoint>,
     pub product_sigma_commitment: Option<product_sigma::Commitment>,
@@ -26,9 +31,8 @@ pub struct MonomialCommitmentTreeNode {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ProverSigmaCommitmentMessage {
-    pub db_bit_sigma_commitments: Vec<Vec<bit_sigma::Commitment>>,
-    pub monomial_product_sigma_commitments: Vec<MonomialCommitmentTreeNode>,
+pub struct BitSigmaChallengeMessage {
+    pub challenges: Vec<bit_sigma::Challenge>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -38,21 +42,14 @@ pub struct MonomialChallengeTreeNode {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct VerifierSigmaChallengeMessage {
-    pub db_bit_sigma_challenges: Vec<Vec<bit_sigma::Challenge>>,
-    pub monomial_product_sigma_challenges: Vec<MonomialChallengeTreeNode>,
+pub struct BitSigmaResponseMessage {
+    pub responses: Vec<bit_sigma::Response>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MonomialResponseTreeNode {
     pub product_sigma_response: Option<product_sigma::Response>,
     pub children: Vec<Box<MonomialResponseTreeNode>>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ProverSigmaResponseMessage {
-    pub db_bit_sigma_responses: Vec<Vec<bit_sigma::Response>>,
-    pub monomial_product_sigma_responses: Vec<MonomialResponseTreeNode>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

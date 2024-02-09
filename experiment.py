@@ -36,7 +36,7 @@ if __name__ == "__main__":
         flamegraph_command.append("--release")
 
     prover_command = [
-        *flamegraph_command,
+        *cargo_command,
         "--bin", "prover", "--",
         "--db-size", str(args.db_size),
         "--max-degree", str(args.max_degree),

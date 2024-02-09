@@ -3,7 +3,7 @@
  */
 
 use rand::{Rng, CryptoRng};
-use curve25519_dalek::{constants, ristretto::RistrettoPoint, scalar::Scalar, traits::VartimeMultiscalarMul};
+use curve25519_dalek::{constants, ristretto::RistrettoPoint, scalar::Scalar, traits::MultiscalarMul};
 
 #[derive(Clone, Debug)]
 pub struct PublicParams {
@@ -20,18 +20,21 @@ pub fn setup<T: Rng + CryptoRng>(mut rng: &mut T) -> PublicParams {
     }
 }
 
+#[inline]
 pub fn commit<T: Rng + CryptoRng>(mut rng: &mut T, val: &Scalar, params: &PublicParams) -> (RistrettoPoint, Scalar) {
     let r = Scalar::random(&mut rng);
 
-    let commitment = RistrettoPoint::vartime_multiscalar_mul([val, &r], [params.g, params.h]);
+    let commitment = RistrettoPoint::multiscalar_mul([val, &r], [params.g, params.h]);
     (commitment, r)
 }
 
+#[inline]
 pub fn commit_with_r(val: &Scalar, r: &Scalar, params: &PublicParams) -> RistrettoPoint {
-    RistrettoPoint::vartime_multiscalar_mul([val, r], [params.g, params.h])
+    RistrettoPoint::multiscalar_mul([val, r], [params.g, params.h])
 }
 
+#[inline]
 pub fn verify(commitment: &RistrettoPoint, val: &Scalar, proof: &Scalar, params: &PublicParams) -> bool {
-    let lhs = RistrettoPoint::vartime_multiscalar_mul([val, proof], [params.g, params.h]);
+    let lhs = RistrettoPoint::multiscalar_mul([val, proof], [params.g, params.h]);
     lhs == *commitment 
 }

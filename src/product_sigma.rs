@@ -141,9 +141,9 @@ pub fn challenge<T: Rng + CryptoRng>(rng: &mut T, comm_msg: &Commitment) -> (Ver
             beta: comm_msg.beta,
             gamma: comm_msg.gamma,
             e,
-            c1_prime: RistrettoPoint::default(),
-            c2_prime: RistrettoPoint::default(),
-            c3_prime: RistrettoPoint::default(),
+            c1_prime: comm_msg.alpha + (e * comm_msg.c_1),
+            c2_prime: comm_msg.beta + (e * comm_msg.c_2),
+            c3_prime: comm_msg.gamma + (e * comm_msg.c_3),
         },
         Challenge {
             e,
@@ -166,28 +166,20 @@ pub fn response(sigma_p: &mut Prover, challenge: &Challenge) -> Response {
 
 pub fn verify(pp: &pedersen::PublicParams, sigma_v: &mut Verifier, response: &Response) -> bool {
 
-    let c_1_prime = sigma_v.alpha + (sigma_v.e * sigma_v.c_1);
-    let c_2_prime = sigma_v.beta + (sigma_v.e * sigma_v.c_2);
-    let c_3_prime = sigma_v.gamma + (sigma_v.e * sigma_v.c_3);
-
-    sigma_v.c1_prime = c_1_prime;
-    sigma_v.c2_prime = c_2_prime;
-    sigma_v.c3_prime = c_3_prime;
-
     let special_pp = pedersen::PublicParams {
         g: sigma_v.c_1,
         h: pp.h,
     };
 
-    if !pedersen::verify(&c_1_prime, &response.z_1, &response.z_2, pp) {
+    if !pedersen::verify(&sigma_v.c1_prime, &response.z_1, &response.z_2, pp) {
         return false;
     }
 
-    if !pedersen::verify(&c_2_prime, &response.z_3, &response.z_4, pp) {
+    if !pedersen::verify(&sigma_v.c2_prime, &response.z_3, &response.z_4, pp) {
         return false;
     }
 
-    if !pedersen::verify(&c_3_prime, &response.z_3, &response.z_5, &special_pp) {
+    if !pedersen::verify(&sigma_v.c3_prime, &response.z_3, &response.z_5, &special_pp) {
         return false;
     }
 

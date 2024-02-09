@@ -21,7 +21,7 @@ use std::time::Instant;
 use vdp_poc::bit_sigma;
 use vdp_poc::product_sigma;
 use vdp_poc::config::{get_n, get_delta, DataT};
-use vdp_poc::messages::{read_from_stream, write_to_stream, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, ProverSigmaCommitmentMessage, ProverSigmaResponseMessage, QueryAnswerMessage, QueryMessage, ReadyMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge, VerifierSigmaChallengeMessage};
+use vdp_poc::messages::{read_from_stream, write_to_stream, BitSigmaChallengeMessage, BitSigmaCommitmentMessage, BitSigmaResponseMessage, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, QueryAnswerMessage, QueryMessage, ReadyMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge};
 use vdp_poc::pedersen;
 
 #[allow(non_snake_case)]
@@ -167,35 +167,37 @@ fn gen_monomial_map<T: PrimInt + Hash>(verifier_trees: &Vec<MonomialVerifierTree
     }
 }
 
-fn verifier_dishonest_commitment_phase<T>(state: &mut VerifierState<T>, stream: &mut TcpStream, dimension: u32) -> bool
+fn verifier_dishonest_commitment_phase<T>(state: &mut VerifierState<T>, stream: &mut TcpStream, db_size: u32, dimension: u32) -> bool
 where T: PrimInt + Eq + Hash + DeserializeOwned
 {
-    let m: ProverSigmaCommitmentMessage = serde_json::from_str(
-        &read_from_stream(stream)
-    ).unwrap();
+    // run challenge phase for each incoming commitment
 
-    // run challenge phase for each commitment
     let mut db_bit_sigma_verifiers: Vec<Vec<bit_sigma::Verifier>> = Vec::new();
-    let mut db_bit_sigma_challenges: Vec<Vec<bit_sigma::Challenge>> = Vec::new();
+    let mut monomial_product_sigma_verifiers: Vec<MonomialVerifierTreeNode> = Vec::new();
 
-    for element_bit_sigma_comms in m.db_bit_sigma_commitments{
+    let mut challenge_messages = Vec::new();
+
+    for i in 0..db_size {
+        eprintln!("  challenging entry     {}/{}", i+1, db_size);
+
         let mut element_bit_sigma_verifiers: Vec<bit_sigma::Verifier> = Vec::new();
         let mut element_bit_sigma_challenges: Vec<bit_sigma::Challenge> = Vec::new();
 
-        for comm in element_bit_sigma_comms {
-            let (sigma_verifier, sigma_challenge) = bit_sigma::challenge(&mut state.rng, &comm);
+        let bit_sigma_comm_m: BitSigmaCommitmentMessage = serde_json::from_str(
+            &read_from_stream(stream)
+        ).unwrap();
+
+        for j in 0..dimension {
+            let (sigma_verifier, sigma_challenge) = bit_sigma::challenge(&mut state.rng, &bit_sigma_comm_m.commitments[j as usize]);
             element_bit_sigma_verifiers.push(sigma_verifier);
             element_bit_sigma_challenges.push(sigma_challenge);
         }
-
         db_bit_sigma_verifiers.push(element_bit_sigma_verifiers);
-        db_bit_sigma_challenges.push(element_bit_sigma_challenges);
-    }
 
-    let mut monomial_product_sigma_verifiers: Vec<MonomialVerifierTreeNode> = Vec::new();
-    let mut monomial_product_sigma_challenges: Vec<MonomialChallengeTreeNode> = Vec::new();
-        
-    for element_product_sigma_root in m.monomial_product_sigma_commitments{
+        challenge_messages.push(serde_json::to_string(&BitSigmaChallengeMessage {
+            challenges: element_bit_sigma_challenges
+        }).unwrap());
+
         let mut verifier_root = MonomialVerifierTreeNode {
             commitment: None,
             product_sigma_verifier: None,
@@ -207,41 +209,57 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
             children: Vec::new(),
         };
 
-        gen_challenge_tree(state, &element_product_sigma_root, &mut verifier_root, &mut challenge_root);
+        let comm_node: MonomialCommitmentTreeNode = serde_json::from_str(
+            &read_from_stream(stream)
+        ).unwrap();
+
+        gen_challenge_tree(state, &comm_node, &mut verifier_root, &mut challenge_root);
         monomial_product_sigma_verifiers.push(verifier_root);
-        monomial_product_sigma_challenges.push(challenge_root);
+
+        challenge_messages.push(serde_json::to_string(&challenge_root).unwrap());
     }
 
-    write_to_stream(
-        stream, serde_json::to_string(&VerifierSigmaChallengeMessage {
-            db_bit_sigma_challenges,
-            monomial_product_sigma_challenges
-        }).unwrap()
-    );
-
-    let resp_msg: ProverSigmaResponseMessage = serde_json::from_str(
-        &read_from_stream(stream)
-    ).unwrap();
+    for msg in challenge_messages {
+        write_to_stream(
+            stream, msg
+        );
+    }
 
     let mut success = true;
 
-    for (i, element_responses) in resp_msg.db_bit_sigma_responses.iter().enumerate() {
-        for (j, resp) in element_responses.iter().enumerate() {
+    for i in 0..db_size as usize {
+        eprintln!("  verifying entry     {}/{}", i+1, db_size);
+
+        let resp_m: BitSigmaResponseMessage = serde_json::from_str(
+            &read_from_stream(stream)
+        ).unwrap();
+
+        for (j, resp) in resp_m.responses.iter().enumerate() {
             let sigma_verified = bit_sigma::verify(&state.pedersen_pp, &mut db_bit_sigma_verifiers[i][j], &resp);
             if !sigma_verified {
                 eprintln!("ERROR: Bit sigma verification failed");
                 success = false;
+                break;
             }
         }
-    }
+        if !success {
+            break;
+        }
 
-    for (i, element_response_root) in resp_msg.monomial_product_sigma_responses.iter().enumerate() {
-        if !verify_response_tree(&state.pedersen_pp, &mut monomial_product_sigma_verifiers[i], &element_response_root) {
+        let resp_node: MonomialResponseTreeNode = serde_json::from_str(
+            &read_from_stream(stream)
+        ).unwrap();
+
+        if !verify_response_tree(&state.pedersen_pp, &mut monomial_product_sigma_verifiers[i], &resp_node) {
             eprintln!("ERROR: Monomial product sigma verification failed");
             success = false;
             break;
         }
+        if !success {
+            break;
+        }
     }
+        
     write_to_stream(
         stream, serde_json::to_string(&VerifierCheckMessage {success}).unwrap()
     );
@@ -477,7 +495,7 @@ fn main() {
    
     synchronize_prover(&mut stream);
     let start_dishonest_comm = Instant::now();
-    let comm_success = verifier_dishonest_commitment_phase(&mut verifier_state, &mut stream, args.dimension);
+    let comm_success = verifier_dishonest_commitment_phase(&mut verifier_state, &mut stream, args.db_size, args.dimension);
     synchronize_prover(&mut stream);
     let duration_dishonest_comm = start_dishonest_comm.elapsed();
 
