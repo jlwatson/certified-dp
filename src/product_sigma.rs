@@ -1,4 +1,4 @@
-use curve25519_dalek::{traits::MultiscalarMul, RistrettoPoint, Scalar};
+use curve25519_dalek::{RistrettoPoint, Scalar};
 use rand::{CryptoRng, Rng};
 use serde::{Deserialize, Serialize};
 
@@ -52,12 +52,9 @@ pub struct Verifier {
     beta: RistrettoPoint,
     gamma: RistrettoPoint,
     e: Scalar,
-    c_prime_combined: RistrettoPoint,
-    /*
     c1_prime: RistrettoPoint,
     c2_prime: RistrettoPoint,
     c3_prime: RistrettoPoint,
-    */
 }
 
 impl Default for Verifier {
@@ -70,12 +67,9 @@ impl Default for Verifier {
             beta: RistrettoPoint::default(),
             gamma: RistrettoPoint::default(),
             e: Scalar::default(),
-            c_prime_combined: RistrettoPoint::default(),
-            /*
             c1_prime: RistrettoPoint::default(),
             c2_prime: RistrettoPoint::default(),
             c3_prime: RistrettoPoint::default(),
-            */
         }
     }
 }
@@ -147,12 +141,9 @@ pub fn challenge<T: Rng + CryptoRng>(rng: &mut T, comm_msg: &Commitment) -> (Ver
             beta: comm_msg.beta,
             gamma: comm_msg.gamma,
             e,
-            c_prime_combined: (comm_msg.alpha + (e * comm_msg.c_1)) + (comm_msg.beta + (e * comm_msg.c_2)) + (comm_msg.gamma + (e * comm_msg.c_3)),
-            /*
             c1_prime: comm_msg.alpha + (e * comm_msg.c_1),
             c2_prime: comm_msg.beta + (e * comm_msg.c_2),
             c3_prime: comm_msg.gamma + (e * comm_msg.c_3),
-            */
         },
         Challenge {
             e,
@@ -175,24 +166,11 @@ pub fn response(sigma_p: &mut Prover, challenge: &Challenge) -> Response {
 
 pub fn verify(pp: &pedersen::PublicParams, sigma_v: &mut Verifier, response: &Response) -> bool {
 
-    /*
     let special_pp = pedersen::PublicParams {
         g: sigma_v.c_1,
         h: pp.h,
     };
-    */
 
-    let lhs = RistrettoPoint::multiscalar_mul([
-        &response.z_1, &response.z_2, &response.z_3, &response.z_4, &response.z_3, &response.z_5
-    ], [
-        pp.g, pp.h, pp.g, pp.h, sigma_v.c_1, pp.h
-    ]);
-
-    //let rhs = sigma_v.c1_prime + sigma_v.c2_prime + sigma_v.c3_prime;
-
-    lhs == sigma_v.c_prime_combined
-
-    /*
     if !pedersen::verify(&sigma_v.c1_prime, &response.z_1, &response.z_2, pp) {
         return false;
     }
@@ -206,5 +184,4 @@ pub fn verify(pp: &pedersen::PublicParams, sigma_v: &mut Verifier, response: &Re
     }
 
     return true
-    */
 }

@@ -85,7 +85,6 @@ fn prover_setup(stream: &mut TcpStream) -> ProverState {
 // -- COMMITMENT PHASE --
 //
 
-#[allow(dead_code)]
 fn calculate_monomial_sum<T: PrimInt>(indices: T, data: &[T]) -> Scalar {
     let inv_indices = !indices;
     let mut cnt: u32 = 0;
@@ -97,7 +96,6 @@ fn calculate_monomial_sum<T: PrimInt>(indices: T, data: &[T]) -> Scalar {
     Scalar::from(cnt)
 }
 
-#[allow(dead_code)]
 fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, data: &[T], monomial_map: &mut HashMap<T, Scalar>,
                                                     dimension: u32, max_degree: u32) {
 
@@ -118,14 +116,12 @@ fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, 
         indices | (T::one() << current_idx.to_usize().unwrap()), current_idx + T::one(), data, monomial_map, dimension, max_degree);
 }
 
-#[allow(dead_code)]
 fn generate_monomial_sums<T: PrimInt + Hash>(data: &[T], dimension: u32, max_degree: u32) -> HashMap<T, Scalar> {
     let mut map = HashMap::new();
     generate_monomial_sums_helper(T::zero(), T::zero(), data, &mut map, dimension, max_degree);
     map
 }
 
-#[allow(dead_code)]
 fn prover_honest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut ProverState, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) {
 
     let mut m = CommitmentMapMessage::<T> {
@@ -269,9 +265,11 @@ fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut 
     let mut db_bit_sigma_provers: Vec<Vec<bit_sigma::Prover>> = Vec::new();
     // Forest of monomial trees per-database element
     let mut monomial_prover_trees: Vec<MonomialProverTreeNode> = Vec::new();
+    // If d=1, we skip product proofs and use the commitments directly
+    let mut db_entry_commitments: Vec<(Scalar, RistrettoPoint, Scalar)> = Vec::new();
 
-    for (i, entry) in database.entries.iter().enumerate() {
-        eprintln!("  committing to entry   {}/{}", i+1, database.entries.len());
+    for (_i, entry) in database.entries.iter().enumerate() {
+        //eprintln!("  committing to entry   {}/{}", _i+1, database.entries.len());
 
         let mut entry_commitments: Vec<(Scalar, RistrettoPoint, Scalar)> = Vec::new();
         let mut entry_sigma_provers: Vec<bit_sigma::Prover> = Vec::new();
@@ -291,6 +289,9 @@ fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut 
         }    
         let _bit_sigma_duration = bit_sigma_start.elapsed();
 
+        if dimension == 1 {
+            db_entry_commitments.push(entry_commitments[0]);
+        }
         db_bit_sigma_provers.push(entry_sigma_provers);
 
         // send the entry bit sigma commitments to the verifier
@@ -299,6 +300,10 @@ fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut 
                 commitments: entry_sigma_commitments
             }).unwrap()
         );
+
+        if dimension == 1 {
+            continue;
+        }
 
         let mut entry_prover_root = MonomialProverTreeNode {
             commitment: None,
@@ -327,7 +332,7 @@ fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut 
     let mut response_messages = Vec::new();
 
     for i in 0..database.entries.len() {
-        eprintln!("  responding to entry {}/{}", i+1, database.entries.len());
+        //eprintln!("  responding to entry {}/{}", i+1, database.entries.len());
 
         let challenge_m: BitSigmaChallengeMessage = serde_json::from_slice(
             &read_from_stream(stream)
@@ -342,8 +347,11 @@ fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut 
         let resp_mesg = serde_json::to_vec(&BitSigmaResponseMessage {
             responses: entry_responses
         }).unwrap();
-        //response_messages.push(compress(&resp_mesg));
         response_messages.push(resp_mesg);
+
+        if dimension == 1 {
+            continue;
+        }
 
         let monomial_challenge_root: MonomialChallengeTreeNode = serde_json::from_slice(
             &read_from_stream(stream)
@@ -370,11 +378,21 @@ fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut 
     if !check_m.success {
         eprintln!("ERROR: Commitment phase failed");
         return false;
-    } else {
-        eprintln!("  check successful");
     }
+    eprintln!("  check successful!");
 
-    gen_monomial_map(&monomial_prover_trees, dimension, &mut database.commitments);
+    if dimension == 1 {
+        let mut total = (Scalar::from(0 as u32), RistrettoPoint::default(), Scalar::from(0 as u32));
+
+        for c in db_entry_commitments {
+            total.0 += c.0;
+            total.1 += c.1;
+            total.2 += c.2;
+        }
+        database.commitments.insert(T::one(), total);
+    } else {
+        gen_monomial_map(&monomial_prover_trees, dimension, &mut database.commitments);
+    }
 
     true
 }
@@ -389,8 +407,10 @@ fn prover_randomness_phase_comm(state: &mut ProverState, stream: &mut TcpStream)
     let (dealer_b_comm, dealer_b_proof) =
         pedersen::commit(&mut state.rng, &Scalar::from(dealer_b), &state.pedersen_pp);
 
+    let _start = Instant::now();
     let (sigma_prover, sigma_commitment) = 
         bit_sigma::commit(&mut state.rng, &state.pedersen_pp, dealer_b, dealer_b_comm, dealer_b_proof);
+    state.randomness_sigma_duration += _start.elapsed();
 
     state.sigma_prover = sigma_prover;
     state.dealer_b = dealer_b;
@@ -428,10 +448,14 @@ fn prover_randomness_phase_response(state: &mut ProverState, stream: &mut TcpStr
     state.final_b = final_b;
     state.final_proof = final_proof;
 
+    let _start = Instant::now();
+    let sigma_response = bit_sigma::response(&mut state.sigma_prover, &m.sigma_challenge);
+    state.randomness_sigma_duration += _start.elapsed();
+
     write_to_stream(
         stream, &serde_json::to_vec(&ProverRandomnessResponse {
             final_commitment,
-            sigma_response: bit_sigma::response(&mut state.sigma_prover, &m.sigma_challenge)
+            sigma_response
         }).unwrap()
     );
 
@@ -470,8 +494,10 @@ where T: Eq + Hash + Display + DeserializeOwned
         let (monomial_sum, _monomial_comm, monomial_proof) = database.commitments.get(monomial_id).unwrap();
         let monomial_coefficient = query_m.coefficients.get(monomial_id).unwrap();
 
+        let _start = Instant::now();
         query_answer += monomial_coefficient * monomial_sum;
         query_proof += monomial_coefficient * monomial_proof;
+        state.coin_flipping_and_agg_duration += _start.elapsed();
     }
 
     write_to_stream(
@@ -522,18 +548,13 @@ struct Args {
     // (optional) skip dishonest commitment phase if we're measuring something else
     #[arg(long, default_value_t = false)]
     skip_dishonest: bool,
+
+    // (optional) number of queries to execute and average runtime over
+    #[arg(long, default_value_t = 100)]
+    num_queries: u32,
 }
 
 fn main() {
-
-    // P-Rand Gen. == Bit-commit
-    //     time for bit sigma in randomness phase
-    // randomness_sigma_duration - TODO
-
-    // Rand N-O & Query-O == Agg
-    //     time for summing monomials in query answer + adding all the coin flips in that loop
-    // coin_flipping_and_agg_duration - TODO
-
     // Check = verifier checks the query
     eprintln!("Running");
 
@@ -604,8 +625,10 @@ fn main() {
     for _ in 0..get_n(args.db_size, args.epsilon, args.delta) {
         prover_randomness_phase_comm(&mut prover_state, &mut stream);
         if prover_randomness_phase_response(&mut prover_state, &mut stream) {
+            let _start = Instant::now();
             prover_state.randomness_bit_sum += Scalar::from(prover_state.final_b);
             prover_state.randomness_bit_proof += prover_state.final_proof;
+            prover_state.coin_flipping_and_agg_duration += _start.elapsed();
         } else {
             println!("ERROR: Randomness phase failed");
             return;
@@ -621,13 +644,24 @@ fn main() {
     // Query phase
     eprintln!("Query phase start");
 
-    synchronize_verifier(&mut stream);
-    let start_query = Instant::now();
-    prover_answer_query(&mut prover_state, &mut database, &mut stream);
-    synchronize_verifier(&mut stream);
-    let duration_query = start_query.elapsed();
+    let mut duration_query = Duration::from_secs(0);
+    for _ in 0..args.num_queries {
+        synchronize_verifier(&mut stream);
+        let iter_start_query = Instant::now();
+        prover_answer_query(&mut prover_state, &mut database, &mut stream);
+        synchronize_verifier(&mut stream);
+        let iter_duration_query = iter_start_query.elapsed();
+
+        duration_query += iter_duration_query;
+    }
+    duration_query /= args.num_queries;
 
     eprintln!("Query phase complete ({:?})", duration_query);
+
+    ptable!(
+        ["Comparison", "P-Rand. Gen. (s)", "Rand. N + & Query N + (µs)"],
+        ["", format!("{:?} s", prover_state.randomness_sigma_duration.as_secs_f32()), format!("{:?} ms", prover_state.coin_flipping_and_agg_duration.as_micros())]
+    );
 
     ptable!(
         ["Prover", format!("(n={}, d={}, ε={}, δ={:?} s={})", args.db_size, args.dimension, args.epsilon, get_delta(args.db_size, args.delta), args.sparsity)],

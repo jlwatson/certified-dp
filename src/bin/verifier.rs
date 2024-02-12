@@ -39,6 +39,7 @@ where T: PrimInt + Hash
     C1: RistrettoPoint,
     CPROOF: Scalar,
 
+    comm_verify_duration: Duration,
     randomness_bit_sigma_verify_duration: Duration,
     randomness_coin_flip_agg_duration: Duration,
 }
@@ -72,6 +73,7 @@ fn verifier_setup<T: PrimInt + Hash>(stream: &mut TcpStream) -> VerifierState<T>
 
         randomness_bit_sigma_verify_duration: Duration::from_secs(0),
         randomness_coin_flip_agg_duration: Duration::from_secs(0),
+        comm_verify_duration: Duration::from_secs(0),
     }
 }
 
@@ -79,7 +81,6 @@ fn verifier_setup<T: PrimInt + Hash>(stream: &mut TcpStream) -> VerifierState<T>
 // -- COMMITMENT PHASE --
 //
 
-#[allow(dead_code)]
 fn verifier_honest_commitment_phase<T: PrimInt + Hash>(state: &mut VerifierState<T>, stream: &mut TcpStream)
 where T: Eq + Hash + DeserializeOwned
 {
@@ -183,8 +184,8 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
 
     let mut challenge_messages = Vec::new();
 
-    for i in 0..db_size {
-        eprintln!("  challenging entry     {}/{}", i+1, db_size);
+    for _i in 0..db_size {
+        //eprintln!("  challenging entry     {}/{}", _i+1, db_size);
 
         let mut element_bit_sigma_verifiers: Vec<bit_sigma::Verifier> = Vec::new();
         let mut element_bit_sigma_challenges: Vec<bit_sigma::Challenge> = Vec::new();
@@ -203,6 +204,10 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
         challenge_messages.push(serde_json::to_vec(&BitSigmaChallengeMessage {
             challenges: element_bit_sigma_challenges
         }).unwrap());
+
+        if dimension == 1 {
+            continue;
+        }
 
         let mut verifier_root = MonomialVerifierTreeNode {
             commitment: None,
@@ -234,12 +239,13 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
     let mut success = true;
 
     for i in 0..db_size as usize {
-        eprintln!("  verifying entry     {}/{}", i+1, db_size);
+        //eprintln!("  verifying entry     {}/{}", i+1, db_size);
 
         let resp_m: BitSigmaResponseMessage = serde_json::from_slice(
             &read_from_stream(stream)
         ).unwrap();
 
+        let _start = Instant::now();
         for (j, resp) in resp_m.responses.iter().enumerate() {
             let sigma_verified = bit_sigma::verify(&state.pedersen_pp, &mut db_bit_sigma_verifiers[i][j], &resp);
             if !sigma_verified {
@@ -250,6 +256,11 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
         }
         if !success {
             break;
+        }
+        state.comm_verify_duration += _start.elapsed();
+
+        if dimension == 1 {
+            continue;
         }
 
         let resp_node: MonomialResponseTreeNode = serde_json::from_slice(
@@ -274,8 +285,16 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
         return false;
     }
 
-    gen_monomial_map(&monomial_product_sigma_verifiers, dimension, &mut state.monomial_commitments);
-
+    if dimension == 1 {
+        let mut sum = RistrettoPoint::default();
+        for i in 0..db_size {
+            sum += db_bit_sigma_verifiers[i as usize][0].b_comm;
+        }
+        state.monomial_commitments.insert(T::one(), sum);
+    } else {
+        gen_monomial_map(&monomial_product_sigma_verifiers, dimension, &mut state.monomial_commitments);
+    }
+    
     true
 }
 
@@ -285,15 +304,19 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
 
 fn verifer_randomness_phase_challenge<T: PrimInt + Hash>(state: &mut VerifierState<T>, stream: &mut TcpStream) {
 
+    let _cf_start = Instant::now();
     state.player_b = state.rng.gen_range(0..2);
+    state.randomness_coin_flip_agg_duration += _cf_start.elapsed();
 
     let m: ProverRandomnessComm = serde_json::from_slice(
         &read_from_stream(stream)
     ).unwrap();
 
+    let _start = Instant::now();
     let (sigma_verifier, sigma_challenge) = bit_sigma::challenge(&mut state.rng, &m.commitment);
 
     state.sigma_verifier = sigma_verifier;
+    state.randomness_bit_sigma_verify_duration += _start.elapsed();
 
     write_to_stream(
         stream, &serde_json::to_vec(&VerifierRandomnessChallenge {
@@ -309,6 +332,7 @@ fn verifier_randomness_phase_check<T: PrimInt + Hash>(state: &mut VerifierState<
         &read_from_stream(stream)
     ).unwrap();
 
+    let _cf_start = Instant::now();
     if state.player_b == 0 {
         if resp_msg.final_commitment != state.sigma_verifier.b_comm{
             eprintln!("ERROR: player_b = 0, final_commitment != b_comm");
@@ -326,8 +350,11 @@ fn verifier_randomness_phase_check<T: PrimInt + Hash>(state: &mut VerifierState<
             return None;
         }
     }
+    state.randomness_coin_flip_agg_duration += _cf_start.elapsed();
 
+    let _start = Instant::now();
     let sigma_verified = bit_sigma::verify(&state.pedersen_pp, &mut state.sigma_verifier, &resp_msg.sigma_response);
+    state.randomness_bit_sigma_verify_duration += _start.elapsed();
 
     write_to_stream(
         stream, &serde_json::to_vec(&VerifierCheckMessage {success: sigma_verified}).unwrap()
@@ -461,22 +488,6 @@ struct Args {
 
 fn main() {
 
-    // V-Dishonest Comm. == C-verify
-    //     time for dishonest commitment phase
-    // duration_dishonest_comm - DONE
-
-    // V-Rand Gen. == P-Verify
-    //     time for bit sigma verify in randomness phase
-    // randomness_bit_sigma_verify_duration - TODO
-
-    // Rand N-O == Morra
-    //     time for coin flipping in randomness phase + adding all the coin flips in that loop
-    // randomness_coin_flip_agg_duration - TODO
-
-    // Query Verify == Check
-    //     time for verifier to check the query
-    // total_duration / n_iter - DONE
-
     eprintln!("Running");
 
     let args = Args::parse();
@@ -545,7 +556,9 @@ fn main() {
         verifer_randomness_phase_challenge(&mut verifier_state, &mut stream);
         match verifier_randomness_phase_check(&mut verifier_state, &mut stream) {
             Some(c) => {
+                let _agg_start = Instant::now();
                 verifier_state.randomness_bit_comm += c;
+                verifier_state.randomness_coin_flip_agg_duration += _agg_start.elapsed();
             },
             None => {
                 println!("ERROR: Randomness phase failed");
@@ -559,25 +572,38 @@ fn main() {
 
     eprintln!("Randomness phase complete ({:?})", duration_rnd);
 
-    // Query generation
-    eprintln!("Query generation start");
-
-    let query_coefficients = verifier_generate_query(&mut verifier_state, args.sparsity);
-    
-    eprintln!("Query generation complete");
-
     // Query phase
     eprintln!("Query phase start");
 
-    synchronize_prover(&mut stream);
-    let start_query = Instant::now();
-    verifier_send_query(&mut verifier_state, &mut stream, &query_coefficients);
-    let (_success, homomorphic_duration, check_duration) = 
-        verifier_check_query(&mut verifier_state, &mut stream, &query_coefficients);
-    synchronize_prover(&mut stream);
-    let duration_query = start_query.elapsed();
+    let num_queries = 100;
+    let mut duration_query = Duration::from_secs(0);
+    let mut homomorphic_duration = Duration::from_secs(0);
+    let mut check_duration = Duration::from_secs(0);
+
+    for _ in 0..num_queries {
+        let query_coefficients = verifier_generate_query(&mut verifier_state, args.sparsity);
+        synchronize_prover(&mut stream);
+        let iter_start_query = Instant::now();
+        verifier_send_query(&mut verifier_state, &mut stream, &query_coefficients);
+        let (_success, iter_homomorphic_duration, iter_check_duration) = 
+            verifier_check_query(&mut verifier_state, &mut stream, &query_coefficients);
+        synchronize_prover(&mut stream);
+        let iter_duration_query = iter_start_query.elapsed();
+
+        duration_query += iter_duration_query;
+        homomorphic_duration += iter_homomorphic_duration;
+        check_duration += iter_check_duration;
+    }
+    duration_query /= num_queries;
+    homomorphic_duration /= num_queries;
+    check_duration /= num_queries;
 
     eprintln!("Query phase complete ({:?})", duration_query);
+
+    ptable!(
+        ["Comparison", "V-Dishonest Comm.", "V-Rand. Gen.", "Rand N +", "Query Verify"],
+        ["", format!("{:?} s", verifier_state.comm_verify_duration.as_secs_f32()), format!("{:?} s", verifier_state.randomness_bit_sigma_verify_duration.as_secs_f32()), format!("{:?} s", verifier_state.randomness_coin_flip_agg_duration.as_secs_f32()), format!("{:?} µs", check_duration.as_micros())]
+    );
 
     ptable!(
         ["Verifier", format!("(n={}, d={}, ε={}, δ={:?} s={})", args.db_size, args.dimension, args.epsilon, get_delta(args.db_size, args.delta), args.sparsity)],
@@ -592,7 +618,4 @@ fn main() {
 
     println!("\n\nCSV (s):");
     println!("{},{},{},{},{},{}", duration_honest_comm.as_secs_f32(), duration_dishonest_comm.as_secs_f32(), duration_rnd.as_secs_f32(), duration_query.as_secs_f32(), homomorphic_duration.as_secs_f32(), check_duration.as_secs_f32());
-
-    println!("\nCSV (µs):");
-    println!("{},{},{},{},{},{}", duration_honest_comm.as_micros(), duration_dishonest_comm.as_micros(), duration_rnd.as_micros(), duration_query.as_micros(), homomorphic_duration.as_micros(), check_duration.as_micros());
 }
