@@ -24,6 +24,7 @@ if __name__ == "__main__":
     parser.add_argument('--sparsity', type=int, help='Sparsity of the query', required=True)
     parser.add_argument('--debug', action='store_true', help='Run debug binaries', default=False)
     parser.add_argument('--no-logs', action='store_true', help='Do not print logs', default=False)
+    parser.add_argument('--skip-dishonest', action='store_true', help='Skip dishonest commitment phase', default=False)
 
     args = parser.parse_args()
 
@@ -49,6 +50,8 @@ if __name__ == "__main__":
     if args.dimension:
         prover_command.append("--dimension")
         prover_command.append(str(args.dimension))
+    if args.skip_dishonest:
+        prover_command.append("--skip-dishonest")
 
     # start prover in background
     with open("prover.log", "w") as f:
@@ -72,6 +75,8 @@ if __name__ == "__main__":
     if args.dimension:
         verifier_command.append("--dimension")
         verifier_command.append(str(args.dimension))
+    if args.skip_dishonest:
+        verifier_command.append("--skip-dishonest")
         
     with open("verifier.log", "w") as f:
         verifier = subprocess.Popen(verifier_command, stdout=f, stderr=subprocess.PIPE)

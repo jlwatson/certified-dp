@@ -1,4 +1,7 @@
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use flate2::write::GzEncoder;
+use flate2::read::GzDecoder;
+use flate2::Compression;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -90,7 +93,7 @@ pub struct QueryAnswerMessage {
     pub proof: Scalar
 }
 
-pub fn read_from_stream(stream: &mut TcpStream) -> String {
+pub fn read_from_stream(stream: &mut TcpStream) -> Vec<u8> {
 
     let mut size_buf = [0; 4];
     stream.read_exact(&mut size_buf).unwrap();
@@ -98,19 +101,32 @@ pub fn read_from_stream(stream: &mut TcpStream) -> String {
     let size = u32::from_le_bytes(size_buf) as usize;
     let mut buffer = vec![0; size];
     stream.read_exact(&mut buffer).unwrap();
-    String::from_utf8_lossy(&buffer[..]).to_string()
+
+    buffer
 }
 
-pub fn write_to_stream(stream: &mut TcpStream, a: String) {
-
+pub fn write_to_stream(stream: &mut TcpStream, a: &[u8]) {
     let size_buf = (a.len() as u32).to_le_bytes();
     match stream.write_all(&size_buf) {
         Ok(_) => (),
         Err(e) => println!("Error: {}", e)
     }
 
-    match stream.write(a.as_bytes()) {
+    match stream.write(&a) {
         Ok(_) => (),
         Err(e) => println!("Error: {}", e)
     }
+}
+
+pub fn compress(buf: &[u8]) -> Vec<u8> {
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+    encoder.write_all(buf).unwrap();
+    encoder.finish().unwrap().to_vec()
+}
+
+pub fn decompress(buf: &[u8]) -> Vec<u8> {
+    let mut decoder = GzDecoder::new(buf);
+    let mut decompressed = Vec::new();
+    decoder.read_to_end(&mut decompressed).unwrap();
+    decompressed
 }

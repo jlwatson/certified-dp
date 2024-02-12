@@ -38,6 +38,9 @@ where T: PrimInt + Hash
     C0: RistrettoPoint,
     C1: RistrettoPoint,
     CPROOF: Scalar,
+
+    randomness_bit_sigma_verify_duration: Duration,
+    randomness_coin_flip_agg_duration: Duration,
 }
 
 //
@@ -48,7 +51,7 @@ fn verifier_setup<T: PrimInt + Hash>(stream: &mut TcpStream) -> VerifierState<T>
 
     let rng = OsRng::default();
    
-    let setup_message: SetupMessage = serde_json::from_str(
+    let setup_message: SetupMessage = serde_json::from_slice(
         &read_from_stream(stream)
     ).unwrap();
 
@@ -66,6 +69,9 @@ fn verifier_setup<T: PrimInt + Hash>(stream: &mut TcpStream) -> VerifierState<T>
         player_b: 0,
         randomness_bit_comm: RistrettoPoint::default(),
         sigma_verifier: bit_sigma::Verifier::default(),
+
+        randomness_bit_sigma_verify_duration: Duration::from_secs(0),
+        randomness_coin_flip_agg_duration: Duration::from_secs(0),
     }
 }
 
@@ -77,7 +83,7 @@ fn verifier_setup<T: PrimInt + Hash>(stream: &mut TcpStream) -> VerifierState<T>
 fn verifier_honest_commitment_phase<T: PrimInt + Hash>(state: &mut VerifierState<T>, stream: &mut TcpStream)
 where T: Eq + Hash + DeserializeOwned
 {
-    let m: CommitmentMapMessage<T> = serde_json::from_str(
+    let m: CommitmentMapMessage<T> = serde_json::from_slice(
         &read_from_stream(stream)
     ).unwrap();
 
@@ -183,7 +189,7 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
         let mut element_bit_sigma_verifiers: Vec<bit_sigma::Verifier> = Vec::new();
         let mut element_bit_sigma_challenges: Vec<bit_sigma::Challenge> = Vec::new();
 
-        let bit_sigma_comm_m: BitSigmaCommitmentMessage = serde_json::from_str(
+        let bit_sigma_comm_m: BitSigmaCommitmentMessage = serde_json::from_slice(
             &read_from_stream(stream)
         ).unwrap();
 
@@ -194,7 +200,7 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
         }
         db_bit_sigma_verifiers.push(element_bit_sigma_verifiers);
 
-        challenge_messages.push(serde_json::to_string(&BitSigmaChallengeMessage {
+        challenge_messages.push(serde_json::to_vec(&BitSigmaChallengeMessage {
             challenges: element_bit_sigma_challenges
         }).unwrap());
 
@@ -209,19 +215,19 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
             children: Vec::new(),
         };
 
-        let comm_node: MonomialCommitmentTreeNode = serde_json::from_str(
+        let comm_node: MonomialCommitmentTreeNode = serde_json::from_slice(
             &read_from_stream(stream)
         ).unwrap();
 
         gen_challenge_tree(state, &comm_node, &mut verifier_root, &mut challenge_root);
         monomial_product_sigma_verifiers.push(verifier_root);
 
-        challenge_messages.push(serde_json::to_string(&challenge_root).unwrap());
+        challenge_messages.push(serde_json::to_vec(&challenge_root).unwrap());
     }
 
     for msg in challenge_messages {
         write_to_stream(
-            stream, msg
+            stream, &msg
         );
     }
 
@@ -230,7 +236,7 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
     for i in 0..db_size as usize {
         eprintln!("  verifying entry     {}/{}", i+1, db_size);
 
-        let resp_m: BitSigmaResponseMessage = serde_json::from_str(
+        let resp_m: BitSigmaResponseMessage = serde_json::from_slice(
             &read_from_stream(stream)
         ).unwrap();
 
@@ -246,7 +252,7 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
             break;
         }
 
-        let resp_node: MonomialResponseTreeNode = serde_json::from_str(
+        let resp_node: MonomialResponseTreeNode = serde_json::from_slice(
             &read_from_stream(stream)
         ).unwrap();
 
@@ -261,7 +267,7 @@ where T: PrimInt + Eq + Hash + DeserializeOwned
     }
         
     write_to_stream(
-        stream, serde_json::to_string(&VerifierCheckMessage {success}).unwrap()
+        stream, &serde_json::to_vec(&VerifierCheckMessage {success}).unwrap()
     );
     
     if !success {
@@ -281,7 +287,7 @@ fn verifer_randomness_phase_challenge<T: PrimInt + Hash>(state: &mut VerifierSta
 
     state.player_b = state.rng.gen_range(0..2);
 
-    let m: ProverRandomnessComm = serde_json::from_str(
+    let m: ProverRandomnessComm = serde_json::from_slice(
         &read_from_stream(stream)
     ).unwrap();
 
@@ -290,7 +296,7 @@ fn verifer_randomness_phase_challenge<T: PrimInt + Hash>(state: &mut VerifierSta
     state.sigma_verifier = sigma_verifier;
 
     write_to_stream(
-        stream, serde_json::to_string(&VerifierRandomnessChallenge {
+        stream, &serde_json::to_vec(&VerifierRandomnessChallenge {
             player_b: state.player_b,
             sigma_challenge
         }).unwrap()
@@ -299,7 +305,7 @@ fn verifer_randomness_phase_challenge<T: PrimInt + Hash>(state: &mut VerifierSta
 
 fn verifier_randomness_phase_check<T: PrimInt + Hash>(state: &mut VerifierState<T>, stream: &mut TcpStream) -> Option<RistrettoPoint> {
 
-    let resp_msg: ProverRandomnessResponse = serde_json::from_str(
+    let resp_msg: ProverRandomnessResponse = serde_json::from_slice(
         &read_from_stream(stream)
     ).unwrap();
 
@@ -307,7 +313,7 @@ fn verifier_randomness_phase_check<T: PrimInt + Hash>(state: &mut VerifierState<
         if resp_msg.final_commitment != state.sigma_verifier.b_comm{
             eprintln!("ERROR: player_b = 0, final_commitment != b_comm");
             write_to_stream(
-                stream, serde_json::to_string(&VerifierCheckMessage {success: false}).unwrap()
+                stream, &serde_json::to_vec(&VerifierCheckMessage {success: false}).unwrap()
             );
             return None;
         }
@@ -315,7 +321,7 @@ fn verifier_randomness_phase_check<T: PrimInt + Hash>(state: &mut VerifierState<
         if resp_msg.final_commitment != state.C1 + state.sigma_verifier.b_comm.neg() {
             eprintln!("ERROR: player_b = 1, final_commitment != C1 + dealer_b_comm.neg()");
             write_to_stream(
-                stream, serde_json::to_string(&VerifierCheckMessage {success: false}).unwrap()
+                stream, &serde_json::to_vec(&VerifierCheckMessage {success: false}).unwrap()
             );
             return None;
         }
@@ -324,7 +330,7 @@ fn verifier_randomness_phase_check<T: PrimInt + Hash>(state: &mut VerifierState<
     let sigma_verified = bit_sigma::verify(&state.pedersen_pp, &mut state.sigma_verifier, &resp_msg.sigma_response);
 
     write_to_stream(
-        stream, serde_json::to_string(&VerifierCheckMessage {success: sigma_verified}).unwrap()
+        stream, &serde_json::to_vec(&VerifierCheckMessage {success: sigma_verified}).unwrap()
     );
 
     if sigma_verified {
@@ -369,7 +375,7 @@ where T: Eq + Hash + Clone + Serialize
         coefficients: query_coefficients.clone()
     };
     write_to_stream(
-        stream, serde_json::to_string(&m).unwrap()
+        stream, &serde_json::to_vec(&m).unwrap()
     );
 }
 
@@ -392,7 +398,7 @@ where T: Eq + Hash + Display
     }
     let duration_homomorphic = start_homomorphic.elapsed();
 
-    let query_answer_m: QueryAnswerMessage = serde_json::from_str(
+    let query_answer_m: QueryAnswerMessage = serde_json::from_slice(
         &read_from_stream(stream)
     ).unwrap();
 
@@ -404,7 +410,7 @@ where T: Eq + Hash + Display
     let result = pedersen::verify(&query_comm, &query_answer, &query_proof, &state.pedersen_pp);
     let duration_verify = start_verify.elapsed();
     if result {
-        println!("Query verified!");
+        //println!("Query verified!");
     } else {
         println!("Query INVALID :(");
     }
@@ -414,9 +420,9 @@ where T: Eq + Hash + Display
 
 fn synchronize_prover(stream: &mut TcpStream) {
     write_to_stream(
-        stream, serde_json::to_string(&ReadyMessage { ready: true }).unwrap()
+        stream, &serde_json::to_vec(&ReadyMessage { ready: true }).unwrap()
     );
-    let _prover_ready: ReadyMessage = serde_json::from_str(
+    let _prover_ready: ReadyMessage = serde_json::from_slice(
         &read_from_stream(stream)
     ).unwrap();
 }
@@ -447,9 +453,29 @@ struct Args {
     // dimension
     #[arg(long, default_value_t = size_of::<DataT>() as u32 * 8)]
     dimension: u32,
+
+    // (optional) skip dishonest commitment phase if we're measuring something else
+    #[arg(long, default_value_t = false)]
+    skip_dishonest: bool,
 }
 
 fn main() {
+
+    // V-Dishonest Comm. == C-verify
+    //     time for dishonest commitment phase
+    // duration_dishonest_comm - DONE
+
+    // V-Rand Gen. == P-Verify
+    //     time for bit sigma verify in randomness phase
+    // randomness_bit_sigma_verify_duration - TODO
+
+    // Rand N-O == Morra
+    //     time for coin flipping in randomness phase + adding all the coin flips in that loop
+    // randomness_coin_flip_agg_duration - TODO
+
+    // Query Verify == Check
+    //     time for verifier to check the query
+    // total_duration / n_iter - DONE
 
     eprintln!("Running");
 
@@ -487,23 +513,26 @@ fn main() {
    
     eprintln!("Honest commitment phase complete ({:?})", duration_honest_comm);
 
-    // clear out the monomial commitments for the dishonest phase
-    verifier_state.monomial_commitments.clear();
+    let mut duration_dishonest_comm = Duration::from_secs(0);
+    if !args.skip_dishonest {
+        // clear out the monomial commitments for the dishonest phase
+        verifier_state.monomial_commitments.clear();
 
-    // Dishonest Commitment Phase
-    eprintln!("Dishonest commitment phase start");
-   
-    synchronize_prover(&mut stream);
-    let start_dishonest_comm = Instant::now();
-    let comm_success = verifier_dishonest_commitment_phase(&mut verifier_state, &mut stream, args.db_size, args.dimension);
-    synchronize_prover(&mut stream);
-    let duration_dishonest_comm = start_dishonest_comm.elapsed();
+        // Dishonest Commitment Phase
+        eprintln!("Dishonest commitment phase start");
+    
+        synchronize_prover(&mut stream);
+        let start_dishonest_comm = Instant::now();
+        let comm_success = verifier_dishonest_commitment_phase(&mut verifier_state, &mut stream, args.db_size, args.dimension);
+        synchronize_prover(&mut stream);
+        duration_dishonest_comm = start_dishonest_comm.elapsed();
 
-    if !comm_success {
-        return;
+        if !comm_success {
+            return;
+        }
+    
+        eprintln!("Dishonest commitment phase complete ({:?})", duration_dishonest_comm);
     }
-   
-    eprintln!("Dishonest commitment phase complete ({:?})", duration_dishonest_comm);
     
     // Randomness Phase
     eprintln!("Randomness phase start");
