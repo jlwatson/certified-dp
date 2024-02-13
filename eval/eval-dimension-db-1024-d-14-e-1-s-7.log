@@ -1,0 +1,99 @@
+[prover  ]    Finished release [optimized] target(s) in 0.27s
+[prover  ]    Running `target/release/prover --db-size 1024 --max-degree 14 --sparsity 14 --epsilon 1.0 --dimension 14 --num-queries 100`
+[prover  ]    Running
+[prover  ]    Setup phase start
+[verifier]    Finished release [optimized] target(s) in 0.08s
+[verifier]    Running `target/release/verifier --db-size 1024 --epsilon 1.0 --sparsity 14 --prover-address '127.0.0.1:10020' --dimension 14 --num-queries 100`
+[verifier]    Running
+[verifier]    Setup phase start
+[verifier]    Setup phase complete
+[verifier]    Honest commitment phase start
+[prover  ]    Setup phase complete
+[prover  ]    Honest commitment phase start
+[prover  ]    Honest commitment phase complete (751.65988ms, 16383 monomials, 45.88µs/monomial)
+[prover  ]    Dishonest commitment phase start
+[verifier]    Honest commitment phase complete (751.717001ms)
+[verifier]    Dishonest commitment phase start
+[prover  ]    check successful!
+[prover  ]    Dishonest commitment phase complete (5616.633937575s, 16383 monomials, 342.833054ms/monomial)
+[prover  ]    Randomness phase start (N: 808)
+[verifier]    Dishonest commitment phase complete (5616.633992734s)
+[verifier]    Randomness phase start
+[prover  ]    Randomness phase complete (332.438076ms, N = 808 iterations, 411.433µs/iteration)
+[prover  ]    Query phase start
+[verifier]    Randomness phase complete (332.434377ms)
+[verifier]    Query phase start
+[prover  ]    Query phase complete (500.619µs)
+[verifier]    Query phase complete (499.447µs)
+
+=== prover.log ===
+
+-- Prover --
+
+Configuration:
+	Database size: 1024
+	Dimension: 14
+	Max degree: 14
+	Sparsity: 14
+	Epsilon: 1
+	Delta: None
+	Prover address: 127.0.0.1:10020
+
++------------+------------------+----------------------------+
+| Comparison | P-Rand. Gen. (s) | Rand. N + & Query N + (µs) |
++------------+------------------+----------------------------+
+|            | 0.08087996 s     | 767 ms                     |
++------------+------------------+----------------------------+
++----------------+------------------------------------------+
+| Prover         | (n=1024, d=14, ε=1, δ=7.888609e-31 s=14) |
++----------------+------------------------------------------+
+| Commit         |                                          |
++----------------+------------------------------------------+
+|   -> Honest    | 751.65988ms                              |
++----------------+------------------------------------------+
+|   -> Dishonest | 5616.633937575s                          |
++----------------+------------------------------------------+
+| Randomness     | 332.438076ms                             |
++----------------+------------------------------------------+
+| Query          | 500.619µs                                |
++----------------+------------------------------------------+
+
+=== verifier.log ===
+
+-- Verifier --
+
+Configuration:
+	Database size: 1024
+	Dimension: 14
+	Epsilon: 1
+	Delta: None
+	Sparsity: 14
+	Prover address: 127.0.0.1:10020
+
++------------+-------------------+--------------+---------------+--------------+
+| Comparison | V-Dishonest Comm. | V-Rand. Gen. | Rand N +      | Query Verify |
++------------+-------------------+--------------+---------------+--------------+
+|            | 2.506551 s        | 0.10117691 s | 0.002714724 s | 44 µs        |
++------------+-------------------+--------------+---------------+--------------+
++------------------+------------------------------------------+
+| Verifier         | (n=1024, d=14, ε=1, δ=7.888609e-31 s=14) |
++------------------+------------------------------------------+
+| Commit           |                                          |
++------------------+------------------------------------------+
+|   -> Honest      | 751.717001ms                             |
++------------------+------------------------------------------+
+|   -> Dishonest   | 5616.633992734s                          |
++------------------+------------------------------------------+
+| Randomness       | 332.434377ms                             |
++------------------+------------------------------------------+
+| Query            | 499.447µs                                |
++------------------+------------------------------------------+
+|   -> Homomorphic | 374.589µs                                |
++------------------+------------------------------------------+
+|   -> Check       | 44.956µs                                 |
++------------------+------------------------------------------+
+
+
+CSV (s):
+0.751717,5616.634,0.33243436,0.000499447,0.000374589,0.000044956
+
