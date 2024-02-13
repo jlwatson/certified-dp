@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use num_traits::PrimInt;
+use num_traits::{pow, PrimInt};
 use rand::{Rng, SeedableRng};
 use rand::prelude::IteratorRandom;
 use rand::rngs::OsRng;
@@ -484,6 +484,14 @@ struct Args {
     // (optional) skip dishonest commitment phase if we're measuring something else
     #[arg(long, default_value_t = false)]
     skip_dishonest: bool,
+
+    // (optional) number of queries to execute and average runtime over
+    #[arg(long, default_value_t = 100)]
+    num_queries: u32,
+
+    // (optional) evaluate sparsity experiment
+    #[arg(long, default_value_t = false)]
+    sparsity_experiment: bool,
 }
 
 fn main() {
@@ -575,12 +583,11 @@ fn main() {
     // Query phase
     eprintln!("Query phase start");
 
-    let num_queries = 100;
     let mut duration_query = Duration::from_secs(0);
     let mut homomorphic_duration = Duration::from_secs(0);
     let mut check_duration = Duration::from_secs(0);
 
-    for _ in 0..num_queries {
+    for _ in 0..args.num_queries {
         let query_coefficients = verifier_generate_query(&mut verifier_state, args.sparsity);
         synchronize_prover(&mut stream);
         let iter_start_query = Instant::now();
@@ -594,11 +601,39 @@ fn main() {
         homomorphic_duration += iter_homomorphic_duration;
         check_duration += iter_check_duration;
     }
-    duration_query /= num_queries;
-    homomorphic_duration /= num_queries;
-    check_duration /= num_queries;
+    duration_query /= args.num_queries;
+    homomorphic_duration /= args.num_queries;
+    check_duration /= args.num_queries;
 
     eprintln!("Query phase complete ({:?})", duration_query);
+
+    if args.sparsity_experiment {
+        eprintln!("Sparsity experiment start");
+        println!("=== Begin Sparsity Experiment ===\n");
+
+        for s in 1..pow(2, args.dimension as usize) {
+            let mut sparsity_homomorphic_duration = Duration::from_secs(0);
+            let mut sparsity_check_duration = Duration::from_secs(0);
+
+            for _ in 0..args.num_queries {
+                let query_coefficients = verifier_generate_query(&mut verifier_state, s);
+                synchronize_prover(&mut stream);
+                verifier_send_query(&mut verifier_state, &mut stream, &query_coefficients);
+                let (_success, s_homomorphic_duration, s_check_duration) = 
+                    verifier_check_query(&mut verifier_state, &mut stream, &query_coefficients);
+                synchronize_prover(&mut stream);
+
+                sparsity_homomorphic_duration += s_homomorphic_duration;
+                sparsity_check_duration += s_check_duration;
+            }
+            sparsity_homomorphic_duration /= args.num_queries;
+            sparsity_check_duration /= args.num_queries;
+            println!("{:?},{:?},{:?}", s, sparsity_homomorphic_duration.as_secs_f32(), sparsity_check_duration.as_secs_f32());
+        }
+
+        println!("\n=== End Sparsity Experiment ===\n");
+        eprintln!("Sparsity experiment complete");
+    }
 
     ptable!(
         ["Comparison", "V-Dishonest Comm.", "V-Rand. Gen.", "Rand N +", "Query Verify"],

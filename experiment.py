@@ -26,6 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('--no-logs', action='store_true', help='Do not print logs', default=False)
     parser.add_argument('--skip-dishonest', action='store_true', help='Skip dishonest commitment phase', default=False)
     parser.add_argument('--num-queries', type=int, help='Number of queries to execute; timing averaged over queries', default=100)
+    parser.add_argument('--sparsity-experiment', action='store_true', help='Run sparsity evaluation experiment', default=False)
 
     args = parser.parse_args()
 
@@ -56,6 +57,8 @@ if __name__ == "__main__":
     if args.num_queries:
         prover_command.append("--num-queries")
         prover_command.append(str(args.num_queries))
+    if args.sparsity_experiment:
+        prover_command.append("--sparsity-experiment")
 
     # start prover in background
     with open("prover.log", "w") as f:
@@ -84,6 +87,8 @@ if __name__ == "__main__":
     if args.num_queries:
         verifier_command.append("--num-queries")
         verifier_command.append(str(args.num_queries))
+    if args.sparsity_experiment:
+        verifier_command.append("--sparsity-experiment")
         
     with open("verifier.log", "w") as f:
         verifier = subprocess.Popen(verifier_command, stdout=f, stderr=subprocess.PIPE)

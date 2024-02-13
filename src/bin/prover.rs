@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use num_traits::PrimInt;
+use num_traits::{pow, PrimInt};
 use rand::{Rng, SeedableRng};
 use rand::rngs::OsRng;
 use rand_chacha::ChaCha20Rng;
@@ -552,6 +552,10 @@ struct Args {
     // (optional) number of queries to execute and average runtime over
     #[arg(long, default_value_t = 100)]
     num_queries: u32,
+
+    // (optional) evaluate sparsity experiment
+    #[arg(long, default_value_t = false)]
+    sparsity_experiment: bool,
 }
 
 fn main() {
@@ -657,6 +661,18 @@ fn main() {
     duration_query /= args.num_queries;
 
     eprintln!("Query phase complete ({:?})", duration_query);
+
+    if args.sparsity_experiment {
+        eprintln!("Sparsity experiment begin");
+        for _s in 1..pow(2, args.dimension as usize) {
+            for _ in 0..args.num_queries {
+                synchronize_verifier(&mut stream);
+                prover_answer_query(&mut prover_state, &mut database, &mut stream);
+                synchronize_verifier(&mut stream);
+            }
+        }
+        eprintln!("Sparsity experiment complete");
+    }
 
     ptable!(
         ["Comparison", "P-Rand. Gen. (s)", "Rand. N + & Query N + (µs)"],
