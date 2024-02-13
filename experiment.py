@@ -25,7 +25,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug', action='store_true', help='Run debug binaries', default=False)
     parser.add_argument('--no-logs', action='store_true', help='Do not print logs', default=False)
     parser.add_argument('--skip-dishonest', action='store_true', help='Skip dishonest commitment phase', default=False)
-    parser.add_argument('--num-queries', type=int, help='Number of queries to execute; timing averaged over queries')
+    parser.add_argument('--num-queries', type=int, help='Number of queries to execute; timing averaged over queries', default=100)
 
     args = parser.parse_args()
 
