@@ -676,7 +676,7 @@ fn main() {
 
     ptable!(
         ["Comparison", "P-Rand. Gen. (s)", "Rand. N + & Query N + (µs)"],
-        ["", format!("{:?} s", prover_state.randomness_sigma_duration.as_secs_f32()), format!("{:?} ms", prover_state.coin_flipping_and_agg_duration.as_micros())]
+        ["", format!("{:?} s", prover_state.randomness_sigma_duration.as_secs_f32()), format!("{:?} µs", prover_state.coin_flipping_and_agg_duration.as_micros())]
     );
 
     ptable!(
