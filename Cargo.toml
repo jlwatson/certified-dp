@@ -1,5 +1,5 @@
 [package]
-name = "vdp-poc"
+name = "certified-dp"
 version = "0.1.0"
 edition = "2021"
 

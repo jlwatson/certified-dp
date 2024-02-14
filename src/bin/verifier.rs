@@ -18,11 +18,11 @@ use std::ops::Neg;
 use std::time::Duration;
 use std::time::Instant;
 
-use vdp_poc::bit_sigma;
-use vdp_poc::product_sigma;
-use vdp_poc::config::{get_n, get_delta, DataT};
-use vdp_poc::messages::{read_from_stream, write_to_stream, BitSigmaChallengeMessage, BitSigmaCommitmentMessage, BitSigmaResponseMessage, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, QueryAnswerMessage, QueryMessage, ReadyMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge};
-use vdp_poc::pedersen;
+use certified_dp::bit_sigma;
+use certified_dp::product_sigma;
+use certified_dp::config::{get_n, get_delta, DataT};
+use certified_dp::messages::{read_from_stream, write_to_stream, BitSigmaChallengeMessage, BitSigmaCommitmentMessage, BitSigmaResponseMessage, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, QueryAnswerMessage, QueryMessage, ReadyMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge};
+use certified_dp::pedersen;
 
 #[allow(non_snake_case)]
 struct VerifierState<T>

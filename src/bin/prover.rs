@@ -16,12 +16,12 @@ use std::net::{TcpStream, TcpListener};
 use std::ops::Neg;
 use std::time::{Duration, Instant};
 
-use vdp_poc::config::{get_n, get_delta, PROVER_ADDRESS, PROVER_PORT, DataT};
-use vdp_poc::data::Data;
-use vdp_poc::messages::{read_from_stream, write_to_stream, BitSigmaChallengeMessage, BitSigmaCommitmentMessage, BitSigmaResponseMessage, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, QueryAnswerMessage, QueryMessage, ReadyMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge};
-use vdp_poc::pedersen;
-use vdp_poc::bit_sigma;
-use vdp_poc::product_sigma;
+use certified_dp::config::{get_n, get_delta, PROVER_ADDRESS, PROVER_PORT, DataT};
+use certified_dp::data::Data;
+use certified_dp::messages::{read_from_stream, write_to_stream, BitSigmaChallengeMessage, BitSigmaCommitmentMessage, BitSigmaResponseMessage, CommitmentMapMessage, MonomialChallengeTreeNode, MonomialCommitmentTreeNode, MonomialResponseTreeNode, ProverRandomnessComm, ProverRandomnessResponse, QueryAnswerMessage, QueryMessage, ReadyMessage, SetupMessage, VerifierCheckMessage, VerifierRandomnessChallenge};
+use certified_dp::pedersen;
+use certified_dp::bit_sigma;
+use certified_dp::product_sigma;
 
 #[allow(non_snake_case)]
 struct ProverState {
