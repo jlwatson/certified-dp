@@ -65,4 +65,4 @@ options:
 
 ### Census-based query example
 
-The Census-based query workload resides in a different [`census` branch](https://github.com/jlwatson/certified-dp/tree/census); details are in that branch's README.
+The Census-based query workload resides in a different `census` branch that resides at [https://anonymous.4open.science/r/certified-dp-174-census/](https://anonymous.4open.science/r/certified-dp-174-census/); details are in that anonymous repository's README.
