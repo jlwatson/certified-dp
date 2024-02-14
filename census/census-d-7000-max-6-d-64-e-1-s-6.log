@@ -2,7 +2,6 @@
 [prover  ]    Running `target/release/prover --db-size 7000 --max-degree 6 --sparsity 64 --epsilon 1.0 --dimension 37 --skip-dishonest --num-queries 1`
 [prover  ]    Running
 [prover  ]    Setup phase start
-[verifier]    Compiling vdp-poc v0.1.0 (/Users/jlwatson/git/vdp-proof-of-concept)
 [verifier]    Finished release [optimized] target(s) in 3.53s
 [verifier]    Running `target/release/verifier --db-size 7000 --epsilon 1.0 --sparsity 64 --prover-address '127.0.0.1:10020' --dimension 37 --skip-dishonest --num-queries 1`
 [verifier]    Running
