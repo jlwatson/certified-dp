@@ -9,9 +9,9 @@ The Prover and Verifier execute as separate processes and communicate through a 
 
 ### Getting started
 
-This projects requires Rust [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+This projects requires a Rust installation [(https://www.rust-lang.org/tools/install)](https://www.rust-lang.org/tools/install).
 
-To run both the prover and the verifier on a simple example with epsilon=1, n=1024 7-bit database entries, and a query sparsity of 7, run:
+To run both the prover and the verifier on a simple example with _ε=1_, _n=1024_ 7-bit database entries, and a query sparsity of 7, run:
 
 `$ python experiment.py --db-size=1024 --max-degree=7 --dimension=7 --epsilon=1 --sparsity=7`
 
