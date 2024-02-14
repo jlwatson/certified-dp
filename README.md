@@ -65,6 +65,6 @@ options:
 
 ### Census-based query example
 
-The Census-based query workload resides in a different `census` branch; details are in that branch's README.
+The Census-based query workload resides in a different [`census` branch](https://github.com/jlwatson/certified-dp/tree/census); details are in that branch's README.
 
 `git checkout census`
