@@ -4,3 +4,4 @@ config.json
 prover.log
 verifier.log
 *.png
+.DS_Store
