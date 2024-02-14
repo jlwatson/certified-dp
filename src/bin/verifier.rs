@@ -18,9 +18,9 @@
 
 use clap::Parser;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use num_traits::{pow, PrimInt};
+use itertools::Itertools;
+use num_traits::PrimInt;
 use rand::{Rng, SeedableRng};
-use rand::prelude::IteratorRandom;
 use rand::rngs::OsRng;
 use rand_chacha::ChaCha20Rng;
 use serde::Serialize;
@@ -404,21 +404,32 @@ fn verifier_randomness_phase_adjust<T: PrimInt + Hash>(state: &mut VerifierState
 /// -- QUERYING PHASE --
 ///
 
-/// Generate a random query polynomial with a given sparsity, choosing random monomials and coefficients
-fn verifier_generate_query<T: PrimInt + Eq + Hash + Copy>(state: &mut VerifierState<T>, sparsity: u32) -> HashMap<T, Scalar> {
+/// OR together a vector of integers
+fn or_vector(a: &Vec<u32>) -> u32 {
+    let mut result = 0;
+    for i in a {
+        result |= i;
+    }
+    result
+}
+
+/// Generate a query polynomial for an income-thresholding query, using the inclusion-exclusion
+/// principle to generate coefficients s.t. it will count any DB entries with any bits set in a
+/// range.
+fn verifier_generate_census_query<T: PrimInt + Eq + Hash + Copy>() -> HashMap<T, Scalar> {
 
     let mut coefficients: HashMap<T, Scalar> = HashMap::new();
-    for _ in 0..sparsity {
-        if sparsity > state.monomial_commitments.len() as u32 {
-            eprintln!("ERROR: Query sparsity ({}) to large for monomial commitments size ({})", sparsity, state.monomial_commitments.len());
-        }
 
-        let mut random_id = state.monomial_commitments.keys().choose(&mut state.rng).unwrap();
-        while coefficients.contains_key(random_id) {
-            random_id = state.monomial_commitments.keys().choose(&mut state.rng).unwrap();
+    //let bit_patterns: Vec<u32> = vec![0x2000000, 0x4000000, 0x8000000, 0x10000000, 0x20000000, 0x40000000];
+    let bit_patterns: Vec<u32> = vec![0x4000000, 0x8000000, 0x10000000, 0x20000000, 0x40000000, 0x80000000];
+
+    // 6 choose 1, 2, 3, 4, 5, 6
+    for choose in 1..7 {
+        let combinations = bit_patterns.clone().into_iter().combinations(choose);
+        let coefficient = if choose % 2 == 1 { Scalar::ONE } else { Scalar::ONE.neg() };
+        for c in combinations {
+            coefficients.insert(T::from(or_vector(&c)).unwrap(), coefficient);
         }
-        let coeff = Scalar::random(&mut state.rng);
-        coefficients.insert(*random_id, coeff);
     }
 
     coefficients
@@ -471,6 +482,8 @@ where T: Eq + Hash + Display
     } else {
         println!("Query INVALID :(");
     }
+
+    eprintln!("\nCENSUS QUERY ANSWER:\n\t{:?}\n\n", query_answer.to_bytes());
 
     (result, duration_homomorphic, duration_verify)
 }
@@ -620,7 +633,8 @@ fn main() {
     let mut check_duration = Duration::from_secs(0);
 
     for _ in 0..args.num_queries {
-        let query_coefficients = verifier_generate_query(&mut verifier_state, args.sparsity);
+        let query_coefficients = verifier_generate_census_query();
+
         synchronize_prover(&mut stream);
         let iter_start_query = Instant::now();
         verifier_send_query(&mut verifier_state, &mut stream, &query_coefficients);
@@ -638,39 +652,6 @@ fn main() {
     check_duration /= args.num_queries;
 
     eprintln!("Query phase complete ({:?})", duration_query);
-
-    if args.sparsity_experiment {
-        eprintln!("Sparsity experiment start");
-        println!("=== Begin Sparsity Experiment ===\n");
-
-        for s in 1..pow(2, args.dimension as usize) {
-            let mut sparsity_homomorphic_duration = Duration::from_secs(0);
-            let mut sparsity_check_duration = Duration::from_secs(0);
-
-            for _ in 0..args.num_queries {
-                let query_coefficients = verifier_generate_query(&mut verifier_state, s);
-                synchronize_prover(&mut stream);
-                verifier_send_query(&mut verifier_state, &mut stream, &query_coefficients);
-                let (_success, s_homomorphic_duration, s_check_duration) = 
-                    verifier_check_query(&mut verifier_state, &mut stream, &query_coefficients);
-                synchronize_prover(&mut stream);
-
-                sparsity_homomorphic_duration += s_homomorphic_duration;
-                sparsity_check_duration += s_check_duration;
-            }
-            sparsity_homomorphic_duration /= args.num_queries;
-            sparsity_check_duration /= args.num_queries;
-            println!("{:?},{:?},{:?}", s, sparsity_homomorphic_duration.as_secs_f32(), sparsity_check_duration.as_secs_f32());
-        }
-
-        println!("\n=== End Sparsity Experiment ===\n");
-        eprintln!("Sparsity experiment complete");
-    }
-
-    ptable!(
-        ["Comparison", "V-Dishonest Comm.", "V-Rand. Gen.", "Rand N +", "Query Verify"],
-        ["", format!("{:?} s", verifier_state.comm_verify_duration.as_secs_f32()), format!("{:?} s", verifier_state.randomness_bit_sigma_verify_duration.as_secs_f32()), format!("{:?} s", verifier_state.randomness_coin_flip_agg_duration.as_secs_f32()), format!("{:?} µs", check_duration.as_micros())]
-    );
 
     ptable!(
         ["Verifier", format!("(n={}, d={}, ε={}, δ={:?} s={})", args.db_size, args.dimension, args.epsilon, get_delta(args.db_size, args.delta), args.sparsity)],

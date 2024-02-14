@@ -1,0 +1,90 @@
+[prover  ]    Finished release [optimized] target(s) in 0.13s
+[prover  ]    Running `target/release/prover --db-size 7000 --max-degree 6 --sparsity 64 --epsilon 1.0 --dimension 37 --skip-dishonest --num-queries 1`
+[prover  ]    Running
+[prover  ]    Setup phase start
+[verifier]    Compiling vdp-poc v0.1.0 (/Users/jlwatson/git/vdp-proof-of-concept)
+[verifier]    Finished release [optimized] target(s) in 3.53s
+[verifier]    Running `target/release/verifier --db-size 7000 --epsilon 1.0 --sparsity 64 --prover-address '127.0.0.1:10020' --dimension 37 --skip-dishonest --num-queries 1`
+[verifier]    Running
+[verifier]    Setup phase start
+[verifier]    Setup phase complete
+[verifier]    Honest commitment phase start
+[prover  ]    Setup phase complete
+[prover  ]    Honest commitment phase start
+[prover  ]    Honest commitment phase complete (135.690475611s, 2835199 monomials, 47.859µs/monomial)
+[prover  ]    Randomness phase start (N: 1160)
+[verifier]    Honest commitment phase complete (135.690502474s)
+[verifier]    Randomness phase start
+[prover  ]    Randomness phase complete (493.759032ms, N = 1160 iterations, 425.654µs/iteration)
+[prover  ]    Query phase start
+[verifier]    Randomness phase complete (493.732737ms)
+[verifier]    Query phase start
+[verifier]    
+[verifier]    CENSUS QUERY ANSWER:
+[verifier]    [221, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[verifier]    
+[verifier]    
+[prover  ]    Query phase complete (1.854799ms)
+[verifier]    Query phase complete (1.855381ms)
+
+=== prover.log ===
+
+-- Prover --
+
+Configuration:
+	Database size: 7000
+	Dimension: 37
+	Max degree: 6
+	Sparsity: 64
+	Epsilon: 1
+	Delta: None
+	Prover address: 127.0.0.1:10020
+
++----------------+---------------------------------+
+| Prover         | (n=7000, d=37, ε=1, δ=0.0 s=64) |
++----------------+---------------------------------+
+| Commit         |                                 |
++----------------+---------------------------------+
+|   -> Honest    | 135.690475611s                  |
++----------------+---------------------------------+
+|   -> Dishonest | 0ns                             |
++----------------+---------------------------------+
+| Randomness     | 493.759032ms                    |
++----------------+---------------------------------+
+| Query          | 1.854799ms                      |
++----------------+---------------------------------+
+
+=== verifier.log ===
+
+-- Verifier --
+
+Configuration:
+	Database size: 7000
+	Dimension: 37
+	Epsilon: 1
+	Delta: None
+	Sparsity: 64
+	Prover address: 127.0.0.1:10020
+
++------------------+---------------------------------+
+| Verifier         | (n=7000, d=37, ε=1, δ=0.0 s=64) |
++------------------+---------------------------------+
+| Commit           |                                 |
++------------------+---------------------------------+
+|   -> Honest      | 135.690502474s                  |
++------------------+---------------------------------+
+|   -> Dishonest   | 0ns                             |
++------------------+---------------------------------+
+| Randomness       | 493.732737ms                    |
++------------------+---------------------------------+
+| Query            | 1.855381ms                      |
++------------------+---------------------------------+
+|   -> Homomorphic | 1.648754ms                      |
++------------------+---------------------------------+
+|   -> Check       | 37.881µs                        |
++------------------+---------------------------------+
+
+
+CSV (s):
+135.6905,0,0.49373275,0.001855381,0.001648754,0.000037881
+

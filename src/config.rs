@@ -28,4 +28,4 @@ pub const PROVER_ADDRESS: &str = "127.0.0.1";
 pub const PROVER_PORT: &str = "10020";
 
 /// Database entry type configuration
-pub type DataT = u16;
+pub type DataT = u64;

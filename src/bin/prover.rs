@@ -18,7 +18,7 @@
 
 use clap::Parser;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use num_traits::{pow, PrimInt};
+use num_traits::PrimInt;
 use rand::{Rng, SeedableRng};
 use rand::rngs::OsRng;
 use rand_chacha::ChaCha20Rng;
@@ -116,7 +116,7 @@ fn calculate_monomial_sum<T: PrimInt>(indices: T, data: &[T]) -> Scalar {
 }
 
 /// Recursive helper function to generate monomial sums for all possible monomials, limited by max monomial degree and entry dimension
-fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, data: &[T], monomial_map: &mut HashMap<T, Scalar>,
+fn generate_monomial_sums_helper<T: PrimInt + Hash + Display>(indices: T, current_idx: T, data: &[T], monomial_map: &mut HashMap<T, Scalar>,
                                                     dimension: u32, max_degree: u32) {
 
     // we've recursively set bits for the bitwidth of the database entry type OR the max configured degree (number of set bits)
@@ -137,14 +137,14 @@ fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, 
 }
 
 /// Generate monomial sums for all possible monomials, limited by max monomial degree and entry dimension
-fn generate_monomial_sums<T: PrimInt + Hash>(data: &[T], dimension: u32, max_degree: u32) -> HashMap<T, Scalar> {
+fn generate_monomial_sums<T: PrimInt + Hash + Display>(data: &[T], dimension: u32, max_degree: u32) -> HashMap<T, Scalar> {
     let mut map = HashMap::new();
     generate_monomial_sums_helper(T::zero(), T::zero(), data, &mut map, dimension, max_degree);
     map
 }
 
 /// Honest commitment phase: generate monomial sums for all possible monomials and commit to each. Send the commitments to the verifier.
-fn prover_honest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut ProverState, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) {
+fn prover_honest_commitment_phase<T: PrimInt + Hash + Serialize + Display>(state: &mut ProverState, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) {
 
     let mut m = CommitmentMapMessage::<T> {
         commitment_map: HashMap::new()
@@ -615,7 +615,7 @@ fn main() {
     let (mut stream, _) = listener.accept().unwrap();
 
     let mut prover_state = prover_setup(&mut stream);
-    let mut database: Data<DataT> = Data::new(&mut prover_state.rng, args.db_size);
+    let mut database: Data<DataT> = Data::new_from_file(args.db_size, "census/census_db.bin");
 
     eprintln!("Setup phase complete");
 
@@ -696,23 +696,6 @@ fn main() {
     duration_query /= args.num_queries;
 
     eprintln!("Query phase complete ({:?})", duration_query);
-
-    if args.sparsity_experiment {
-        eprintln!("Sparsity experiment begin");
-        for _s in 1..pow(2, args.dimension as usize) {
-            for _ in 0..args.num_queries {
-                synchronize_verifier(&mut stream);
-                prover_answer_query(&mut prover_state, &mut database, &mut stream);
-                synchronize_verifier(&mut stream);
-            }
-        }
-        eprintln!("Sparsity experiment complete");
-    }
-
-    ptable!(
-        ["Comparison", "P-Rand. Gen. (s)", "Rand. N + & Query N + (µs)"],
-        ["", format!("{:?} s", prover_state.randomness_sigma_duration.as_secs_f32()), format!("{:?} µs", prover_state.coin_flipping_and_agg_duration.as_micros())]
-    );
 
     ptable!(
         ["Prover", format!("(n={}, d={}, ε={}, δ={:?} s={})", args.db_size, args.dimension, args.epsilon, get_delta(args.db_size, args.delta), args.sparsity)],
