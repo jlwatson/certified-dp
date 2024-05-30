@@ -11,11 +11,11 @@ The evaluation numbers presented in the paper were acquired on a 2.7 GHz Quad-Co
 
 ### Getting started
 
-1. This projects requires
-  * A Rust installation: [(https://www.rust-lang.org/tools/install)](https://www.rust-lang.org/tools/install).
-  * GCC: `apt install gcc`
+This projects requires:
+  1. A Rust installation: [(https://www.rust-lang.org/tools/install)](https://www.rust-lang.org/tools/install).
+  2. A C compiler: `apt install gcc`
 
-2. To run both the prover and the verifier on a simple example with _ε=1_, _n=1024_ 7-bit database entries, and a query sparsity of 7, run:
+To run both the prover and the verifier on a simple example with _ε=1_, _n=1024_ 7-bit database entries, and a query sparsity of 7, run:
 
   `$ python3 experiment.py --db-size=1024 --max-degree=7 --dimension=7 --epsilon=1 --sparsity=7`
 
