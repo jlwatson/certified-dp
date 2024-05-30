@@ -1,9 +1,16 @@
+/**
+ * product_sigma.rs
+ * 
+ * Product Sigma Protocol implementation, used as a building block for the main protocol.
+ */
+
 use curve25519_dalek::{RistrettoPoint, Scalar};
 use rand::{CryptoRng, Rng};
 use serde::{Deserialize, Serialize};
 
 use crate::pedersen;
 
+/// Prover state for the product sigma protocol.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Prover {
     m_1: Scalar,
@@ -22,6 +29,7 @@ pub struct Prover {
     b_5: Scalar,
 }
 
+/// Zero-out values by default
 impl Default for Prover {
     fn default() -> Self {
         Prover {
@@ -43,6 +51,7 @@ impl Default for Prover {
     }
 }
 
+/// Verifier state for the product sigma protocol.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Verifier {
     c_1: RistrettoPoint,
@@ -54,6 +63,7 @@ pub struct Verifier {
     c3_prime: RistrettoPoint,
 }
 
+/// Zero-out values by default
 impl Default for Verifier {
     fn default() -> Self {
         Verifier {
@@ -68,6 +78,7 @@ impl Default for Verifier {
     }
 }
 
+/// Contents of commitment message from prover.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Commitment {
     c_1: RistrettoPoint,
@@ -78,11 +89,13 @@ pub struct Commitment {
     gamma: RistrettoPoint,
 }
 
+/// Contents of challenge message from verifier.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Challenge {
     e: Scalar,
 }
 
+/// Contents of response message back from prover.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Response {
     z_1: Scalar,
@@ -92,7 +105,7 @@ pub struct Response {
     z_5: Scalar,
 }
 
-
+/// (1) The prover commits to the three values m_1 * m_2 = m_3.
 pub fn commit<T: Rng + CryptoRng>(rng: &mut T, pp: &pedersen::PublicParams,
                                   (m_1, c_1, r_1): (Scalar, RistrettoPoint, Scalar),
                                   (m_2, c_2, r_2): (Scalar, RistrettoPoint, Scalar),
@@ -122,6 +135,7 @@ pub fn commit<T: Rng + CryptoRng>(rng: &mut T, pp: &pedersen::PublicParams,
     )
 }
 
+/// (2) The verifier picks a random challenge `e`.
 pub fn challenge<T: Rng + CryptoRng>(rng: &mut T, comm_msg: &Commitment) -> (Verifier, Challenge) {
 
     let e = Scalar::random(rng);
@@ -142,6 +156,7 @@ pub fn challenge<T: Rng + CryptoRng>(rng: &mut T, comm_msg: &Commitment) -> (Ver
     )
 }
 
+/// (3) The prover sends the response back to the verifier based on the challenge.
 pub fn response(sigma_p: &mut Prover, challenge: &Challenge) -> Response {
 
     let z_1 = sigma_p.b_1 + (challenge.e * sigma_p.m_1);
@@ -155,6 +170,7 @@ pub fn response(sigma_p: &mut Prover, challenge: &Challenge) -> Response {
     }
 }
 
+/// (4) The verifier checks each Pederesen commitment to finish the protocol.
 pub fn verify(pp: &pedersen::PublicParams, sigma_v: &mut Verifier, response: &Response) -> bool {
 
     let special_pp = pedersen::PublicParams {

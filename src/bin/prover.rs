@@ -1,3 +1,19 @@
+/**
+ * prover.rs
+ * 
+ * Primary Prover executable with the following arguments:
+ * 
+ *   db_size: number of elements in the database
+ *   dimension: (optional) override the dimension of the database entries
+ *   max_degree: maximum monomial degree
+ *   epsilon: differential privacy epsilon value
+ *   delta: (optional) differential privacy delta value, otherwise set based on DB size
+ *   sparsity: maximum sparsity of the supported query monomials
+ *   skip_dishonest: (optional) skip dishonest commitment phase
+ *   num_queries: (optional) number of queries to execute and average runtime over 
+ *   sparsity_experiment: (optional) special flag to evaluate sparsity experiment from paper
+ */
+
 #[macro_use] extern crate prettytable;
 
 use clap::Parser;
@@ -23,6 +39,7 @@ use certified_dp::pedersen;
 use certified_dp::bit_sigma;
 use certified_dp::product_sigma;
 
+/// Primary prover state for the protocol execution
 #[allow(non_snake_case)]
 struct ProverState {
     rng: OsRng,
@@ -42,10 +59,11 @@ struct ProverState {
     coin_flipping_and_agg_duration: Duration,
 }
 
-//
-// -- SETUP PHASE --
-//
+///
+/// -- SETUP PHASE --
+///
 
+/// Prover setup: generate a seed for shared randomness, setup Pedersen commitment scheme, and initialize state.
 fn prover_setup(stream: &mut TcpStream) -> ProverState {
 
     let mut rng = OsRng::default();
@@ -81,10 +99,11 @@ fn prover_setup(stream: &mut TcpStream) -> ProverState {
     }
 }
 
-//
-// -- COMMITMENT PHASE --
-//
+///
+/// -- COMMITMENT PHASE --
+///
 
+/// For a given monomial, calculate count of entries that satisfy the monomial condition
 fn calculate_monomial_sum<T: PrimInt>(indices: T, data: &[T]) -> Scalar {
     let inv_indices = !indices;
     let mut cnt: u32 = 0;
@@ -96,6 +115,7 @@ fn calculate_monomial_sum<T: PrimInt>(indices: T, data: &[T]) -> Scalar {
     Scalar::from(cnt)
 }
 
+/// Recursive helper function to generate monomial sums for all possible monomials, limited by max monomial degree and entry dimension
 fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, data: &[T], monomial_map: &mut HashMap<T, Scalar>,
                                                     dimension: u32, max_degree: u32) {
 
@@ -116,12 +136,14 @@ fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, 
         indices | (T::one() << current_idx.to_usize().unwrap()), current_idx + T::one(), data, monomial_map, dimension, max_degree);
 }
 
+/// Generate monomial sums for all possible monomials, limited by max monomial degree and entry dimension
 fn generate_monomial_sums<T: PrimInt + Hash>(data: &[T], dimension: u32, max_degree: u32) -> HashMap<T, Scalar> {
     let mut map = HashMap::new();
     generate_monomial_sums_helper(T::zero(), T::zero(), data, &mut map, dimension, max_degree);
     map
 }
 
+/// Honest commitment phase: generate monomial sums for all possible monomials and commit to each. Send the commitments to the verifier.
 fn prover_honest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut ProverState, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) {
 
     let mut m = CommitmentMapMessage::<T> {
@@ -139,12 +161,14 @@ fn prover_honest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut Pro
     );
 }
 
+/// Tree of product sigma proofs for each monomial, to avoid recomputing partial product proofs for each different monomial
 pub struct MonomialProverTreeNode {
     pub commitment: Option<(Scalar, RistrettoPoint, Scalar)>,
     pub product_sigma_prover: Option<product_sigma::Prover>,
     pub children: Vec<Box<MonomialProverTreeNode>>,
 }
 
+/// Generate a tree of partial monomial sigma proofs for the dishonest commitment phase
 fn gen_monomial_tree(state: &mut ProverState, entry_bit_commitments: &Vec<(Scalar, RistrettoPoint, Scalar)>,
                      curr_nodes: (&mut MonomialProverTreeNode, &mut MonomialCommitmentTreeNode),
                      curr_idx: isize, curr_degree: usize, dimension: usize, max_degree: usize) {
@@ -197,6 +221,7 @@ fn gen_monomial_tree(state: &mut ProverState, entry_bit_commitments: &Vec<(Scala
     }
 }
 
+/// Given a matching prover sigma protocol state and challenge tree, generate the response tree recursively by advancing the sigma protocol at each node
 fn gen_response_tree(state: &mut ProverState, prover_node: &mut MonomialProverTreeNode, challenge_node: &MonomialChallengeTreeNode, response_node: &mut MonomialResponseTreeNode) {
     match &challenge_node.product_sigma_challenge {
         None => {
@@ -218,6 +243,7 @@ fn gen_response_tree(state: &mut ProverState, prover_node: &mut MonomialProverTr
     }
 }
 
+/// Calculates the number of nodes in a monomial commitment tree
 fn _count_tree(node: &MonomialProverTreeNode) -> usize {
     let mut count = 1;
     for child in &node.children {
@@ -226,6 +252,7 @@ fn _count_tree(node: &MonomialProverTreeNode) -> usize {
     count
 }
 
+/// Based on the monomial commitment tree, extract the final commitment for each monomial.
 fn extract_monomials<T: PrimInt + Hash>(prover_node: &MonomialProverTreeNode, curr_tag: T, dimension: u32, element_commitment_map: &mut HashMap<T, (Scalar, RistrettoPoint, Scalar)>) {
     match prover_node.commitment {
         None => {},
@@ -241,6 +268,7 @@ fn extract_monomials<T: PrimInt + Hash>(prover_node: &MonomialProverTreeNode, cu
     }
 }
 
+/// Based on the forest of monomial trees, generate the final commitment for each monomial and aggregate them into a map by monomial.
 fn gen_monomial_map<T: PrimInt + Hash>(prover_trees: &Vec<MonomialProverTreeNode>, dimension: u32, commitment_map: &mut HashMap<T, (Scalar, RistrettoPoint, Scalar)>) {
 
     for prover_root in prover_trees {
@@ -259,6 +287,7 @@ fn gen_monomial_map<T: PrimInt + Hash>(prover_trees: &Vec<MonomialProverTreeNode
     }
 }
 
+/// Dishonest commitment phase: compute the result of a set of all bit and product sigma protocols for database entries between us and the verifier, then aggregate into a <monomial -> commitment> map.
 fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut ProverState, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) -> bool {
 
     // Per-database entry bit sigma protocols
@@ -401,6 +430,7 @@ fn prover_dishonest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut 
 // -- RANDOMNESS PHASE --
 //
 
+/// Prover randomness phase: generate a random bit and commit to it. Send the commitment to the verifier.
 fn prover_randomness_phase_comm(state: &mut ProverState, stream: &mut TcpStream) {
 
     let dealer_b: u32 = state.rng.gen_range(0..2);
@@ -424,6 +454,7 @@ fn prover_randomness_phase_comm(state: &mut ProverState, stream: &mut TcpStream)
     );
 }
 
+/// Prover randomness phase: generate a response to the verifier's challenge. Send the response to the verifier.
 fn prover_randomness_phase_response(state: &mut ProverState, stream: &mut TcpStream) -> bool {
 
     let final_commitment: RistrettoPoint;
@@ -465,6 +496,7 @@ fn prover_randomness_phase_response(state: &mut ProverState, stream: &mut TcpStr
     result.success
 }
 
+/// Prover randomness phase: adjust the randomness bit sum and proof based on the verifier's challenge.
 fn prover_randomness_phase_adjust(state: &mut ProverState, db_size: u32, epsilon: f32, delta: Option<f32>) {
     let adjustment_factor = Scalar::from((get_n(db_size, epsilon, delta)/2) as u32);
     state.randomness_bit_sum -= adjustment_factor;
@@ -475,6 +507,7 @@ fn prover_randomness_phase_adjust(state: &mut ProverState, db_size: u32, epsilon
 // -- QUERYING PHASE --
 //
 
+/// Prover answers a query from the verifier, based on the coefficients of the monomials in the query. Send the answer to the verifier.
 fn prover_answer_query<T>(state: &mut ProverState, database: &mut Data<T>, stream: &mut TcpStream)
 where T: Eq + Hash + Display + DeserializeOwned
 {
@@ -509,6 +542,7 @@ where T: Eq + Hash + Display + DeserializeOwned
     );
 }
 
+/// Prover synchronizes with the verifier to ensure both parties are ready to star the protocol.
 fn synchronize_verifier(stream: &mut TcpStream) {
     let _verifier_ready: ReadyMessage = serde_json::from_slice(
         &read_from_stream(stream)
@@ -518,6 +552,7 @@ fn synchronize_verifier(stream: &mut TcpStream) {
     );
 }
 
+/// Main function for the prover executable, parsing arguments and executing the protocol phases.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {

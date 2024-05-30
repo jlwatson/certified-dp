@@ -1,4 +1,10 @@
-// DP parameters
+/**
+ * config.rs
+ * 
+ * Calculates DP parameters and contains other global constants such as the prover address and port.
+ */
+
+/// DP parameter: get `n` based on epsilon and delta; if delta is not provided, assume the default and calculate it based on the database size
 #[inline]
 pub fn get_n(db_size: u32, epsilon: f32, delta: Option<f32>) -> u32 {
     match delta {
@@ -8,6 +14,7 @@ pub fn get_n(db_size: u32, epsilon: f32, delta: Option<f32>) -> u32 {
     }
 }
 
+/// DP parameter: get `delta` based on configuration provided or calculate it based on the database size
 #[inline]
 pub fn get_delta(db_size: u32, delta: Option<f32>) -> f32 {
     match delta {
@@ -16,8 +23,9 @@ pub fn get_delta(db_size: u32, delta: Option<f32>) -> f32 {
     }
 }
 
-// Prover configuration
+/// Prover network address configuration
 pub const PROVER_ADDRESS: &str = "127.0.0.1";
 pub const PROVER_PORT: &str = "10020";
 
+/// Database entry type configuration
 pub type DataT = u16;

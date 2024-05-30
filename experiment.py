@@ -1,3 +1,34 @@
+'''
+experiment.py
+
+Convenience script to run the prover and verifier binaries in parallel and print
+their output. Log messages are prefixed with the name of the binary that
+produced them and go to stderr, while the final output of each binary is printed
+to stdout.
+
+----
+
+usage: experiment.py [-h] --db-size DB_SIZE --max-degree MAX_DEGREE [--dimension DIMENSION] --epsilon EPSILON [--delta DELTA] --sparsity SPARSITY [--debug] [--no-logs] [--skip-dishonest] [--num-queries NUM_QUERIES] [--sparsity-experiment]
+
+options:
+  -h, --help            show this help message and exit
+  --db-size DB_SIZE     Size of the database
+  --max-degree MAX_DEGREE
+                        Maximum degree of query
+  --dimension DIMENSION
+                        Dimension of database entries
+  --epsilon EPSILON     Epsilon for differential privacy
+  --delta DELTA         Delta for differential privacy
+  --sparsity SPARSITY   Sparsity of the query
+  --debug               Run debug binaries
+  --no-logs             Do not print logs
+  --skip-dishonest      Skip dishonest commitment phase
+  --num-queries NUM_QUERIES
+                        Number of queries to execute; timing averaged over queries
+  --sparsity-experiment
+                        Run sparsity evaluation experiment
+'''
+
 import argparse
 from time import sleep
 import subprocess

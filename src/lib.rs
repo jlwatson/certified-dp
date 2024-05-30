@@ -1,3 +1,9 @@
+/**
+ * lib.rs
+ * 
+ * Main library file for Certified DP containing all the individual modules
+ */
+
 pub mod pedersen;
 pub mod config;
 pub mod messages;

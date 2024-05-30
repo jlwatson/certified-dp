@@ -1,3 +1,9 @@
+/**
+ * bit_sigma.rs
+ * 
+ * Bit Sigma Protocol implementation, used as a building block for the main protocol.
+ */
+
 use std::ops::Neg;
 
 use curve25519_dalek::{RistrettoPoint, Scalar};
@@ -6,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::pedersen;
 
+/// Prover state for the bit sigma protocol.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Prover {
     b: u32,
@@ -15,6 +22,7 @@ pub struct Prover {
     e_not_b: Scalar,
 }
 
+/// Zero-out values by default
 impl Default for Prover {
     fn default() -> Self {
         Prover {
@@ -27,6 +35,7 @@ impl Default for Prover {
     }
 }
 
+/// Verifier state for the bit sigma protocol.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Verifier {
     pub b_comm: RistrettoPoint,
@@ -35,6 +44,7 @@ pub struct Verifier {
     c_1: RistrettoPoint,
 }
 
+/// Zero-out values by default
 impl Default for Verifier {
     fn default() -> Self {
         Verifier {
@@ -46,6 +56,7 @@ impl Default for Verifier {
     }
 }
 
+/// Commitment message for the bit sigma protocol from prover.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Commitment {
     b_comm: RistrettoPoint,
@@ -53,11 +64,13 @@ pub struct Commitment {
     c_1: RistrettoPoint,
 }
 
+/// Challenge message for the bit sigma protocol from verifier.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Challenge {
     e: Scalar,
 }
 
+/// Response message for the bit sigma protocol from prover.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Response {
     z_0: Scalar,
@@ -66,6 +79,7 @@ pub struct Response {
     e_1: Scalar,
 }
 
+/// (1) Prover commits to a bit `b` that it is either 0 or 1.
 pub fn commit<T: Rng + CryptoRng>(rng: &mut T, pp: &pedersen::PublicParams,
                                   b: u32, b_comm: RistrettoPoint, b_proof: Scalar) -> (Prover, Commitment) {
 
@@ -92,6 +106,7 @@ pub fn commit<T: Rng + CryptoRng>(rng: &mut T, pp: &pedersen::PublicParams,
     )
 }
 
+// (2) Verifier picks a random challenge `e`.
 pub fn challenge<T: Rng + CryptoRng>(rng: &mut T, comm_msg: &Commitment) -> (Verifier, Challenge) {
 
     let e = Scalar::random(rng);
@@ -109,6 +124,7 @@ pub fn challenge<T: Rng + CryptoRng>(rng: &mut T, comm_msg: &Commitment) -> (Ver
     )
 }
 
+/// (3) Prover responds based on the challenge.
 pub fn response(sigma_p: &mut Prover, challenge: &Challenge) -> Response {
 
     let e_b = challenge.e - sigma_p.e_not_b;
@@ -122,6 +138,7 @@ pub fn response(sigma_p: &mut Prover, challenge: &Challenge) -> Response {
     }
 }
 
+/// (4) Verifier verifies the response from the prover.
 pub fn verify(pp: &pedersen::PublicParams, sigma_v: &mut Verifier, response: &Response) -> bool {
     if sigma_v.e != response.e_0 + response.e_1 {
         println!("ERROR: e != e0 + e1");

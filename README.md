@@ -7,13 +7,17 @@ order Ristretto group.
 
 The Prover and Verifier execute as separate processes and communicate through a localhost TCP socket.
 
+The evaluation numbers presented in the paper were acquired on a 2.7 GHz Quad-Core Intel Core i7 processor with 16 GB RAM. 
+
 ### Getting started
 
-This projects requires a Rust installation [(https://www.rust-lang.org/tools/install)](https://www.rust-lang.org/tools/install).
+1. This projects requires
+  * A Rust installation: [(https://www.rust-lang.org/tools/install)](https://www.rust-lang.org/tools/install).
+  * GCC: `apt install gcc`
 
-To run both the prover and the verifier on a simple example with _ε=1_, _n=1024_ 7-bit database entries, and a query sparsity of 7, run:
+2. To run both the prover and the verifier on a simple example with _ε=1_, _n=1024_ 7-bit database entries, and a query sparsity of 7, run:
 
-`$ python experiment.py --db-size=1024 --max-degree=7 --dimension=7 --epsilon=1 --sparsity=7`
+  `$ python3 experiment.py --db-size=1024 --max-degree=7 --dimension=7 --epsilon=1 --sparsity=7`
 
 Both processes will start and begin printing status messages to `stderr`. Once the query has been completed, a summary of performance statistics for both parties will be printed to `stdout` -- these timing outputs underly the evaluation in our paper.
 
@@ -23,7 +27,7 @@ Both processes will start and begin printing status messages to `stderr`. Once t
 experiment.py             # convenience script to run prover & verifier and log output
 eval/
     *.log                 # performance logs underlying paper evaluation
-    eval-results.ipynb    # data process & figure generation
+    eval-results.ipynb    # data processing & figure generation
     eval.sh               # convenience script to rerun all main evaluation
 src/
     config.rs             # project wide constants/configuration
