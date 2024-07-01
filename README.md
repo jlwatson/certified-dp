@@ -20,6 +20,10 @@ Both processes will start and begin printing status messages to `stderr`. Once t
 
 Note that the maximum predicate degree the prover supports is 6 (enough to evaluate the higher-order income bits in each entry), while the per-entry dimension is 37. We set sparsity to 64 (appx. the sparsity of the generated query) and ask the prover to perform honest verification only (as would likely be the case if querying the Census directly).
 
+### Generating data used in the paper
+
+Executing the convenience script `census/census.sh` will run the experiment query and save the latency numbers that we report in Section 5.2 to `census/census-d-7000-max-6-d-64-e-1-s-6.log`.
+
 ### Branch structure
 
 ```
