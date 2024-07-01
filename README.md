@@ -2,8 +2,7 @@
 
 ### Overview
 
-This repository contains a Rust-based implementation of a certified Binomial mechanism for arbitary differentially-private counting queries, backed by `curve25519-dalek`, which implements Pedersen commitments over the prime-
-order Ristretto group.
+This repository contains a Rust-based implementation of a certified Binomial mechanism for arbitary differentially-private counting queries for the paper ["Certifying Private Probabilistic Mechanisms"](https://eprint.iacr.org/2024/938). It is backed by `curve25519-dalek`, which implements Pedersen commitments over the prime-order Ristretto group.
 
 The Prover and Verifier execute as separate processes and communicate through a localhost TCP socket.
 
@@ -20,6 +19,10 @@ To run both the prover and the verifier on a simple example with _ε=1_, _n=1024
   `$ python3 experiment.py --db-size=1024 --max-degree=7 --dimension=7 --epsilon=1 --sparsity=7`
 
 Both processes will start and begin printing status messages to `stderr`. Once the query has been completed, a summary of performance statistics for both parties will be printed to `stdout` -- these timing outputs underly the evaluation in our paper.
+
+### Generating data used in the paper
+
+Executing the convenience script `eval/eval.sh` will run each of the experiments presented in Section 5.2 and save the latency results to `eval/eval-*.log`. You can use these logs to regenerate Figures 4(a-d) and Table 2 using `eval/eval-results.ipynb`.
 
 ### Repository structure
 
