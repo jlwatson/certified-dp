@@ -1,3 +1,9 @@
+# Deprecated (see `main` branch at [https://github.com/jlwatson/certified-dp](https://github.com/jlwatson/certified-dp) for updated code)
+
+Code merged into main branch so this branch is no longer needed :)
+
+-----
+
 ## Certified DP - Census Query Example
 
 This branch contains modfied Prover and Verifier executables that execute the main certified DP protocol to perform a query on a 2018 US Census PUMS dataset [(https://www.census.gov/programs-surveys/acs/microdata.html)](https://www.census.gov/programs-surveys/acs/microdata.html). It contains AGEP (age), SEX (sex), SCHL (education) and PINCP (personal income) for 7000 anonymous respondents. We pack the data for each entry into a 37-bit database value that the Prover and Verifier operate over.
