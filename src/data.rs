@@ -7,7 +7,7 @@
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use num_traits::{PrimInt, FromBytes, ToBytes};
 use rand::{CryptoRng, Fill, Rng};
-use std::collections::HashMap;
+use std::{collections::HashMap, fs::File, io::Read};
 
 /// Database entries and commitments are just a vector of values and hashmap of commitments, respectively
 pub struct Data<T> {
@@ -34,6 +34,25 @@ where
             rng.fill(&mut bytes);
             val = T::from_le_bytes(&bytes);
             entries.push(val);
+        }
+
+        Data {
+            entries,
+            commitments,
+        }
+    }
+
+    pub fn new_from_file(path: &str, db_size: u32) -> Self {
+        let mut entries = Vec::new();
+        let commitments = HashMap::new();
+
+        let mut file = File::open(path).unwrap();
+        let mut buffer = [0u8; 8];
+
+        for _ in 0..db_size {
+            file.read_exact(&mut buffer).unwrap();
+            let val = u64::from_le_bytes(buffer);
+            entries.push(T::from(val).unwrap());
         }
 
         Data {

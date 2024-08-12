@@ -27,5 +27,11 @@ pub fn get_delta(db_size: u32, delta: Option<f32>) -> f32 {
 pub const PROVER_ADDRESS: &str = "127.0.0.1";
 pub const PROVER_PORT: &str = "10020";
 
-/// Database entry type configuration
+#[cfg(not(any(custom_type = "u32", custom_type = "u64")))]
 pub type DataT = u16;
+
+#[cfg(custom_type = "u32")]
+pub type DataT = u32;
+
+#[cfg(custom_type = "u64")]
+pub type DataT = u64;

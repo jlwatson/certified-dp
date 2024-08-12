@@ -18,6 +18,7 @@
 
 use clap::Parser;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use itertools::Itertools;
 use num_traits::{pow, PrimInt};
 use rand::{Rng, SeedableRng};
 use rand::prelude::IteratorRandom;
@@ -405,7 +406,7 @@ fn verifier_randomness_phase_adjust<T: PrimInt + Hash>(state: &mut VerifierState
 ///
 
 /// Generate a random query polynomial with a given sparsity, choosing random monomials and coefficients
-fn verifier_generate_query<T: PrimInt + Eq + Hash + Copy>(state: &mut VerifierState<T>, sparsity: u32) -> HashMap<T, Scalar> {
+fn verifier_gen_random_query<T: PrimInt + Eq + Hash + Copy>(state: &mut VerifierState<T>, sparsity: u32) -> HashMap<T, Scalar> {
 
     let mut coefficients: HashMap<T, Scalar> = HashMap::new();
     for _ in 0..sparsity {
@@ -424,6 +425,37 @@ fn verifier_generate_query<T: PrimInt + Eq + Hash + Copy>(state: &mut VerifierSt
     coefficients
 }
 
+/// OR together a vector of integers
+fn or_vector(a: &Vec<u32>) -> u32 {
+    let mut result = 0;
+    for i in a {
+        result |= i;
+    }
+    result
+}
+
+/// Generate a query polynomial for an income-thresholding query, using the inclusion-exclusion
+/// principle to generate coefficients s.t. it will count any DB entries with any bits set in a
+/// range.
+fn verifier_gen_census_query<T: PrimInt + Eq + Hash + Copy>() -> HashMap<T, Scalar> {
+
+    let mut coefficients: HashMap<T, Scalar> = HashMap::new();
+
+    //let bit_patterns: Vec<u32> = vec![0x2000000, 0x4000000, 0x8000000, 0x10000000, 0x20000000, 0x40000000];
+    let bit_patterns: Vec<u32> = vec![0x4000000, 0x8000000, 0x10000000, 0x20000000, 0x40000000, 0x80000000];
+
+    // 6 choose 1, 2, 3, 4, 5, 6
+    for choose in 1..7 {
+        let combinations = bit_patterns.clone().into_iter().combinations(choose);
+        let coefficient = if choose % 2 == 1 { Scalar::ONE } else { Scalar::ONE.neg() };
+        for c in combinations {
+            coefficients.insert(T::from(or_vector(&c)).unwrap(), coefficient);
+        }
+    }
+
+    coefficients
+}
+
 fn verifier_send_query<T: PrimInt + Hash>(_state: &mut VerifierState<T>, stream: &mut TcpStream, query_coefficients: &HashMap<T, Scalar>)
 where T: Eq + Hash + Clone + Serialize
 {
@@ -436,7 +468,7 @@ where T: Eq + Hash + Clone + Serialize
 }
 
 /// Having received a response from the prover, verify the query commitments
-fn verifier_check_query<T: PrimInt + Hash>(state: &mut VerifierState<T>, stream: &mut TcpStream, query_coefficients: &HashMap<T, Scalar>) -> (bool, Duration, Duration)
+fn verifier_check_query<T: PrimInt + Hash>(state: &mut VerifierState<T>, stream: &mut TcpStream, query_coefficients: &HashMap<T, Scalar>, print_query_answer: bool) -> (bool, Duration, Duration)
 where T: Eq + Hash + Display
 {
     let mut query_comm = state.randomness_bit_comm;
@@ -466,9 +498,9 @@ where T: Eq + Hash + Display
     let start_verify = Instant::now();
     let result = pedersen::verify(&query_comm, &query_answer, &query_proof, &state.pedersen_pp);
     let duration_verify = start_verify.elapsed();
-    if result {
-        //println!("Query verified!");
-    } else {
+    if result && print_query_answer {
+        eprintln!("\nQUERY ANSWER:\n\t{:?}\n\n", query_answer.to_bytes());
+    } else if !result {
         println!("Query INVALID :(");
     }
 
@@ -524,6 +556,10 @@ struct Args {
     // (optional) evaluate sparsity experiment
     #[arg(long, default_value_t = false)]
     sparsity_experiment: bool,
+
+    // (optional) run census query experiment
+    #[arg(long, default_value_t = false)]
+    census_query: bool,
 }
 
 fn main() {
@@ -620,12 +656,16 @@ fn main() {
     let mut check_duration = Duration::from_secs(0);
 
     for _ in 0..args.num_queries {
-        let query_coefficients = verifier_generate_query(&mut verifier_state, args.sparsity);
+        let query_coefficients = if args.census_query {
+            verifier_gen_census_query()
+        } else {
+            verifier_gen_random_query(&mut verifier_state, args.sparsity)
+        };
         synchronize_prover(&mut stream);
         let iter_start_query = Instant::now();
         verifier_send_query(&mut verifier_state, &mut stream, &query_coefficients);
         let (_success, iter_homomorphic_duration, iter_check_duration) = 
-            verifier_check_query(&mut verifier_state, &mut stream, &query_coefficients);
+            verifier_check_query(&mut verifier_state, &mut stream, &query_coefficients, args.census_query);
         synchronize_prover(&mut stream);
         let iter_duration_query = iter_start_query.elapsed();
 
@@ -648,11 +688,11 @@ fn main() {
             let mut sparsity_check_duration = Duration::from_secs(0);
 
             for _ in 0..args.num_queries {
-                let query_coefficients = verifier_generate_query(&mut verifier_state, s);
+                let query_coefficients = verifier_gen_random_query(&mut verifier_state, s);
                 synchronize_prover(&mut stream);
                 verifier_send_query(&mut verifier_state, &mut stream, &query_coefficients);
                 let (_success, s_homomorphic_duration, s_check_duration) = 
-                    verifier_check_query(&mut verifier_state, &mut stream, &query_coefficients);
+                    verifier_check_query(&mut verifier_state, &mut stream, &query_coefficients, false);
                 synchronize_prover(&mut stream);
 
                 sparsity_homomorphic_duration += s_homomorphic_duration;

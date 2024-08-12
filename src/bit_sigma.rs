@@ -2,6 +2,8 @@
  * bit_sigma.rs
  * 
  * Bit Sigma Protocol implementation, used as a building block for the main protocol.
+ * 
+ * See paper A.2 "Certified Differential Privacy Construction with Dishonest Commitment Phase".
  */
 
 use std::ops::Neg;

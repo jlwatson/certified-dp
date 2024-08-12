@@ -116,7 +116,7 @@ fn calculate_monomial_sum<T: PrimInt>(indices: T, data: &[T]) -> Scalar {
 }
 
 /// Recursive helper function to generate monomial sums for all possible monomials, limited by max monomial degree and entry dimension
-fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, data: &[T], monomial_map: &mut HashMap<T, Scalar>,
+fn generate_monomial_sums_helper<T: PrimInt + Hash + Display>(indices: T, current_idx: T, data: &[T], monomial_map: &mut HashMap<T, Scalar>,
                                                     dimension: u32, max_degree: u32) {
 
     // we've recursively set bits for the bitwidth of the database entry type OR the max configured degree (number of set bits)
@@ -137,14 +137,14 @@ fn generate_monomial_sums_helper<T: PrimInt + Hash>(indices: T, current_idx: T, 
 }
 
 /// Generate monomial sums for all possible monomials, limited by max monomial degree and entry dimension
-fn generate_monomial_sums<T: PrimInt + Hash>(data: &[T], dimension: u32, max_degree: u32) -> HashMap<T, Scalar> {
+fn generate_monomial_sums<T: PrimInt + Hash + Display>(data: &[T], dimension: u32, max_degree: u32) -> HashMap<T, Scalar> {
     let mut map = HashMap::new();
     generate_monomial_sums_helper(T::zero(), T::zero(), data, &mut map, dimension, max_degree);
     map
 }
 
 /// Honest commitment phase: generate monomial sums for all possible monomials and commit to each. Send the commitments to the verifier.
-fn prover_honest_commitment_phase<T: PrimInt + Hash + Serialize>(state: &mut ProverState, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) {
+fn prover_honest_commitment_phase<T: PrimInt + Hash + Serialize + Display>(state: &mut ProverState, stream: &mut TcpStream, database: &mut Data<T>, dimension: u32, max_degree: u32) {
 
     let mut m = CommitmentMapMessage::<T> {
         commitment_map: HashMap::new()
@@ -591,6 +591,10 @@ struct Args {
     // (optional) evaluate sparsity experiment
     #[arg(long, default_value_t = false)]
     sparsity_experiment: bool,
+
+    // (optional) database file
+    #[arg(long, default_value = None)]
+    db_file: Option<String>,
 }
 
 fn main() {
@@ -606,6 +610,8 @@ fn main() {
     println!("\tSparsity: {}", args.sparsity);
     println!("\tEpsilon: {}", args.epsilon);
     println!("\tDelta: {:?}", args.delta);
+    println!("\tDatabase file: {:?}", args.db_file);
+    println!("\tDatabase type: {:?}", std::any::type_name::<DataT>());
     println!("\tProver address: {}:{}\n", PROVER_ADDRESS, PROVER_PORT);
 
     // Setup
@@ -615,7 +621,11 @@ fn main() {
     let (mut stream, _) = listener.accept().unwrap();
 
     let mut prover_state = prover_setup(&mut stream);
-    let mut database: Data<DataT> = Data::new(&mut prover_state.rng, args.db_size);
+    // if db_file is provided, load the database from the file, otherwise generate a random database
+    let mut database: Data<DataT> = match args.db_file {
+        Some(file) => Data::new_from_file(&file, args.db_size),
+        None => Data::new(&mut prover_state.rng, args.db_size),
+    };
 
     eprintln!("Setup phase complete");
 

@@ -21,3 +21,6 @@ python experiment.py --db-size=1024 --max-degree=7 --dimension=7 --epsilon=1 --s
 python experiment.py --db-size=1024 --max-degree=10 --dimension=10 --epsilon=1 --sparsity=10 > eval/eval-dimension-db-1024-d-10-e-1-s-7.log
 python experiment.py --db-size=1024 --max-degree=12 --dimension=12 --epsilon=1 --sparsity=12 > eval/eval-dimension-db-1024-d-12-e-1-s-7.log
 python experiment.py --db-size=1024 --max-degree=14 --dimension=14 --epsilon=1 --sparsity=14 > eval/eval-dimension-db-1024-d-14-e-1-s-7.log
+
+# census experiment
+python experiment.py --db-size=7000 --max-degree=6 --dimension=37 --epsilon=1 --sparsity=64 --skip-dishonest --num-queries=1 --db-file census/census_db.bin --census-query --db-dimension=64 > eval/census-d-7000-max-6-d-64-e-1-s-6.log

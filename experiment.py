@@ -3,12 +3,15 @@ experiment.py
 
 Convenience script to run the prover and verifier binaries in parallel and print
 their output. Log messages are prefixed with the name of the binary that
-produced them and go to stderr, while the final output of each binary is printed
-to stdout.
+produced them.
 
 ----
 
-usage: experiment.py [-h] --db-size DB_SIZE --max-degree MAX_DEGREE [--dimension DIMENSION] --epsilon EPSILON [--delta DELTA] --sparsity SPARSITY [--debug] [--no-logs] [--skip-dishonest] [--num-queries NUM_QUERIES] [--sparsity-experiment]
+usage: experiment.py [-h] --db-size DB_SIZE --max-degree MAX_DEGREE [--dimension DIMENSION] --epsilon EPSILON [--delta DELTA] --sparsity SPARSITY
+                     [--debug] [--no-logs] [--skip-dishonest] [--num-queries NUM_QUERIES] [--sparsity-experiment] [--db-file DB_FILE]
+                     [--census-query] [--db-dimension {16,32,64}]
+
+Run experiment.
 
 options:
   -h, --help            show this help message and exit
@@ -27,9 +30,15 @@ options:
                         Number of queries to execute; timing averaged over queries
   --sparsity-experiment
                         Run sparsity evaluation experiment
+  --db-file DB_FILE     Database file to use
+  --census-query        Run census query
+  --db-dimension {16,32,64}
+                        Override of backing database entry size (e.g. entries might have a logical dimension of 34-bits, but backed by 64-bit
+                        integers)
 '''
 
 import argparse
+import os
 from time import sleep
 import subprocess
 import threading
@@ -58,6 +67,9 @@ if __name__ == "__main__":
     parser.add_argument('--skip-dishonest', action='store_true', help='Skip dishonest commitment phase', default=False)
     parser.add_argument('--num-queries', type=int, help='Number of queries to execute; timing averaged over queries', default=100)
     parser.add_argument('--sparsity-experiment', action='store_true', help='Run sparsity evaluation experiment', default=False)
+    parser.add_argument('--db-file', type=str, help='Database file to use')
+    parser.add_argument('--census-query', action='store_true', help='Run census query', default=False)
+    parser.add_argument('--db-dimension', type=int, help='Override of backing database entry size (e.g. entries might have a logical dimension of 34-bits, but backed by 64-bit integers)', default=16, choices=[16, 32, 64])
 
     args = parser.parse_args()
 
@@ -65,9 +77,9 @@ if __name__ == "__main__":
     if not args.debug:
         cargo_command.append("--release")
 
-    flamegraph_command = ["cargo", "flamegraph", "-o=prover.svg"]
-    if not args.debug:
-        flamegraph_command.append("--release")
+    env = os.environ.copy()
+    if args.db_dimension:
+        env["RUSTFLAGS"] = f"--cfg=custom_type=\"u{args.db_dimension}\""
 
     prover_command = [
         *cargo_command,
@@ -90,10 +102,13 @@ if __name__ == "__main__":
         prover_command.append(str(args.num_queries))
     if args.sparsity_experiment:
         prover_command.append("--sparsity-experiment")
+    if args.db_file:
+        prover_command.append("--db-file")
+        prover_command.append(args.db_file)
 
     # start prover in background
     with open("prover.log", "w") as f:
-        prover = subprocess.Popen(prover_command, stdout=f, stderr=subprocess.PIPE)
+        prover = subprocess.Popen(prover_command, stdout=f, stderr=subprocess.PIPE, env=env)
     prover_read_thread = threading.Thread(target=stderr_reader, args=(prover, "[prover  ]"))
     prover_read_thread.start()
 
@@ -120,9 +135,11 @@ if __name__ == "__main__":
         verifier_command.append(str(args.num_queries))
     if args.sparsity_experiment:
         verifier_command.append("--sparsity-experiment")
+    if args.census_query:
+        verifier_command.append("--census-query")
         
     with open("verifier.log", "w") as f:
-        verifier = subprocess.Popen(verifier_command, stdout=f, stderr=subprocess.PIPE)
+        verifier = subprocess.Popen(verifier_command, stdout=f, stderr=subprocess.PIPE, env=env)
     verifier_read_thread = threading.Thread(target=stderr_reader, args=(verifier, "[verifier]"))
     verifier_read_thread.start()
 

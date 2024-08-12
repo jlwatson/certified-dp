@@ -2,6 +2,11 @@
  * product_sigma.rs
  * 
  * Product Sigma Protocol implementation, used as a building block for the main protocol.
+ * 
+ * See paper A.2 "Certified Differential Privacy Construction with Dishonest Commitment Phase". This multiplication protocol is based on: 
+ *     Maurer, U.: Unifying zero-knowledge proofs of knowledge.
+ *     In: Preneel, B. (ed.) Progress in Cryptology – AFRICACRYPT 2009. pp. 272–286. Springer Berlin Heidelberg, Berlin, Heidelberg (2009)
+ * 
  */
 
 use curve25519_dalek::{RistrettoPoint, Scalar};

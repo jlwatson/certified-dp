@@ -1,0 +1,162 @@
+[prover  ]    Compiling libc v0.2.152
+[prover  ]    Compiling proc-macro2 v1.0.76
+[prover  ]    Compiling unicode-ident v1.0.12
+[prover  ]    Compiling cfg-if v1.0.0
+[prover  ]    Compiling serde v1.0.196
+[prover  ]    Compiling semver v1.0.21
+[prover  ]    Compiling utf8parse v0.2.1
+[prover  ]    Compiling rustix v0.38.31
+[prover  ]    Compiling anstyle-query v1.0.2
+[prover  ]    Compiling anstyle-parse v0.2.3
+[prover  ]    Compiling bitflags v2.4.2
+[prover  ]    Compiling colorchoice v1.0.0
+[prover  ]    Compiling crc32fast v1.3.2
+[prover  ]    Compiling platforms v3.3.0
+[prover  ]    Compiling anstyle v1.0.5
+[prover  ]    Compiling ryu v1.0.16
+[prover  ]    Compiling itoa v1.0.10
+[prover  ]    Compiling autocfg v1.1.0
+[prover  ]    Compiling memchr v2.7.1
+[prover  ]    Compiling num-traits v0.2.17
+[prover  ]    Compiling anstream v0.6.11
+[prover  ]    Compiling rustc_version v0.4.0
+[prover  ]    Compiling csv-core v0.1.11
+[prover  ]    Compiling heck v0.4.1
+[prover  ]    Compiling strsim v0.10.0
+[prover  ]    Compiling curve25519-dalek v4.1.1
+[prover  ]    Compiling ppv-lite86 v0.2.17
+[prover  ]    Compiling serde_json v1.0.113
+[prover  ]    Compiling clap_lex v0.6.0
+[prover  ]    Compiling adler v1.0.2
+[prover  ]    Compiling quote v1.0.35
+[prover  ]    Compiling miniz_oxide v0.7.2
+[prover  ]    Compiling syn v2.0.48
+[prover  ]    Compiling clap_builder v4.4.18
+[prover  ]    Compiling unicode-width v0.1.11
+[prover  ]    Compiling zeroize v1.7.0
+[prover  ]    Compiling either v1.13.0
+[verifier]    Blocking waiting for file lock on build directory
+[prover  ]    Compiling getrandom v0.2.12
+[prover  ]    Compiling errno v0.3.8
+[prover  ]    Compiling rand_core v0.6.4
+[prover  ]    Compiling dirs-sys-next v0.1.2
+[prover  ]    Compiling dirs-next v2.0.0
+[prover  ]    Compiling term v0.7.0
+[prover  ]    Compiling rand_chacha v0.3.1
+[prover  ]    Compiling cpufeatures v0.2.12
+[prover  ]    Compiling lazy_static v1.4.0
+[prover  ]    Compiling encode_unicode v1.0.0
+[prover  ]    Compiling is-terminal v0.4.10
+[prover  ]    Compiling subtle v2.5.0
+[prover  ]    Compiling rand v0.8.5
+[prover  ]    Compiling itertools v0.13.0
+[prover  ]    Compiling flate2 v1.0.28
+[prover  ]    Compiling serde_derive v1.0.196
+[prover  ]    Compiling curve25519-dalek-derive v0.1.1
+[prover  ]    Compiling clap_derive v4.4.7
+[prover  ]    Compiling clap v4.4.18
+[prover  ]    Compiling csv v1.3.0
+[prover  ]    Compiling prettytable v0.10.0
+[prover  ]    Compiling certified-dp v0.1.0 (/Users/jlwatson/git/certified-dp)
+[prover  ]    Finished release [optimized] target(s) in 23.13s
+[prover  ]    Running `target/release/prover --db-size 7000 --max-degree 6 --sparsity 64 --epsilon 1.0 --dimension 37 --skip-dishonest --num-queries 1 --db-file census/census_db.bin`
+[verifier]    Compiling certified-dp v0.1.0 (/Users/jlwatson/git/certified-dp)
+[prover  ]    Running
+[prover  ]    Setup phase start
+[verifier]    Finished release [optimized] target(s) in 21.83s
+[verifier]    Running `target/release/verifier --db-size 7000 --epsilon 1.0 --sparsity 64 --prover-address '127.0.0.1:10020' --dimension 37 --skip-dishonest --num-queries 1 --census-query`
+[verifier]    Running
+[verifier]    Setup phase start
+[verifier]    Setup phase complete
+[verifier]    Honest commitment phase start
+[prover  ]    Setup phase complete
+[prover  ]    Honest commitment phase start
+[prover  ]    Honest commitment phase complete (127.471308925s, 2835199 monomials, 44.96µs/monomial)
+[prover  ]    Randomness phase start (N: 1160)
+[verifier]    Honest commitment phase complete (127.471380094s)
+[verifier]    Randomness phase start
+[verifier]    Randomness phase complete (453.231238ms)
+[verifier]    Query phase start
+[prover  ]    Randomness phase complete (453.314677ms, N = 1160 iterations, 390.788µs/iteration)
+[prover  ]    Query phase start
+[verifier]    
+[verifier]    QUERY ANSWER:
+[verifier]    [227, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[verifier]    
+[verifier]    
+[prover  ]    Query phase complete (1.825445ms)
+[verifier]    Query phase complete (1.865073ms)
+
+=== prover.log ===
+
+-- Prover --
+
+Configuration:
+	Database size: 7000
+	Dimension: 37
+	Max degree: 6
+	Sparsity: 64
+	Epsilon: 1
+	Delta: None
+	Database file: Some("census/census_db.bin")
+	Database type: "u64"
+	Prover address: 127.0.0.1:10020
+
++------------+------------------+----------------------------+
+| Comparison | P-Rand. Gen. (s) | Rand. N + & Query N + (µs) |
++------------+------------------+----------------------------+
+|            | 0.11037427 s     | 241 µs                     |
++------------+------------------+----------------------------+
++----------------+---------------------------------+
+| Prover         | (n=7000, d=37, ε=1, δ=0.0 s=64) |
++----------------+---------------------------------+
+| Commit         |                                 |
++----------------+---------------------------------+
+|   -> Honest    | 127.471308925s                  |
++----------------+---------------------------------+
+|   -> Dishonest | 0ns                             |
++----------------+---------------------------------+
+| Randomness     | 453.314677ms                    |
++----------------+---------------------------------+
+| Query          | 1.825445ms                      |
++----------------+---------------------------------+
+
+=== verifier.log ===
+
+-- Verifier --
+
+Configuration:
+	Database size: 7000
+	Dimension: 37
+	Epsilon: 1
+	Delta: None
+	Sparsity: 64
+	Prover address: 127.0.0.1:10020
+
++------------+-------------------+--------------+---------------+--------------+
+| Comparison | V-Dishonest Comm. | V-Rand. Gen. | Rand N +      | Query Verify |
++------------+-------------------+--------------+---------------+--------------+
+|            | 0.0 s             | 0.14076073 s | 0.003522573 s | 48 µs        |
++------------+-------------------+--------------+---------------+--------------+
++------------------+---------------------------------+
+| Verifier         | (n=7000, d=37, ε=1, δ=0.0 s=64) |
++------------------+---------------------------------+
+| Commit           |                                 |
++------------------+---------------------------------+
+|   -> Honest      | 127.471380094s                  |
++------------------+---------------------------------+
+|   -> Dishonest   | 0ns                             |
++------------------+---------------------------------+
+| Randomness       | 453.231238ms                    |
++------------------+---------------------------------+
+| Query            | 1.865073ms                      |
++------------------+---------------------------------+
+|   -> Homomorphic | 1.598444ms                      |
++------------------+---------------------------------+
+|   -> Check       | 48.004µs                        |
++------------------+---------------------------------+
+
+
+CSV (s):
+127.47138,0,0.45323125,0.001865073,0.001598444,0.000048004
+
